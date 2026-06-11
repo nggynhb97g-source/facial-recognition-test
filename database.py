@@ -90,7 +90,7 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-10))
 
 
-def search_faces(embedding: np.ndarray, threshold: float = 0.35) -> list[dict]:
+def search_faces(embedding: np.ndarray, threshold: float = 0.40) -> list[dict]:
     faces = get_all_faces()
     matches = []
     for face in faces:

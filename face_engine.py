@@ -2,8 +2,12 @@ import numpy as np
 from PIL import Image
 import io
 import logging
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+ROOT = Path(__file__).parent
+INSIGHTFACE_ROOT = ROOT / ".insightface"
 
 _engine = None
 
@@ -20,16 +24,21 @@ class FaceEngine:
         import insightface
         from insightface.app import FaceAnalysis
 
-        logger.info("Loading InsightFace model (buffalo_l)...")
+        INSIGHTFACE_ROOT.mkdir(parents=True, exist_ok=True)
+        logger.info("Loading InsightFace model (buffalo_l) — root: %s", INSIGHTFACE_ROOT)
         self.app = FaceAnalysis(
             name="buffalo_l",
+            root=str(INSIGHTFACE_ROOT),
             providers=["CPUExecutionProvider"],
         )
         self.app.prepare(ctx_id=-1, det_size=(640, 640))
         logger.info("InsightFace model loaded.")
 
     def _read_image(self, data: bytes) -> np.ndarray:
-        img = Image.open(io.BytesIO(data)).convert("RGB")
+        try:
+            img = Image.open(io.BytesIO(data)).convert("RGB")
+        except Exception as exc:
+            raise ValueError(f"Cannot decode image: {exc}") from exc
         # InsightFace expects BGR (OpenCV convention)
         return np.array(img)[:, :, ::-1]
 
