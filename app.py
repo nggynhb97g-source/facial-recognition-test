@@ -14,6 +14,15 @@ from face_engine import get_engine
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
+
+
+async def read_limited(upload: UploadFile) -> bytes:
+    data = await upload.read(MAX_UPLOAD_BYTES + 1)
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(413, detail="File too large (max 10 MB)")
+    return data
+
 BASE_DIR = Path(__file__).parent
 KNOWN_FACES_DIR = BASE_DIR / "known_faces"
 STATIC_DIR = BASE_DIR / "static"
@@ -48,8 +57,8 @@ async def compare_faces(
 ):
     engine = get_engine()
 
-    data1 = await image1.read()
-    data2 = await image2.read()
+    data1 = await read_limited(image1)
+    data2 = await read_limited(image2)
 
     info1 = engine.get_embedding_with_info(data1)
     info2 = engine.get_embedding_with_info(data2)
@@ -80,7 +89,7 @@ async def add_face(
 ):
     engine = get_engine()
 
-    data = await image.read()
+    data = await read_limited(image)
     info = engine.get_embedding_with_info(data)
 
     if info["embedding"] is None:
@@ -140,7 +149,7 @@ async def search_face(
 ):
     engine = get_engine()
 
-    data = await image.read()
+    data = await read_limited(image)
     info = engine.get_embedding_with_info(data)
 
     if info["embedding"] is None:

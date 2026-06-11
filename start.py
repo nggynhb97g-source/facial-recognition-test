@@ -2,6 +2,9 @@
 """
 Auto-installs all dependencies and starts the FaceID server.
 Usage:  python start.py [--port 8000] [--host 0.0.0.0]
+
+Pterodactyl: set SERVER_PORT (or PORT) in the egg environment variables.
+The startup command should be:  python start.py
 """
 import subprocess
 import sys
@@ -28,9 +31,12 @@ def ensure_dirs():
 
 
 def main():
+    # Pterodactyl injects SERVER_PORT; fall back to PORT, then 8000
+    default_port = int(os.environ.get("SERVER_PORT", os.environ.get("PORT", 8000)))
+
     parser = argparse.ArgumentParser(description="FaceID — Facial Recognition WebUI")
     parser.add_argument("--host", default="0.0.0.0")
-    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--port", type=int, default=default_port)
     parser.add_argument("--no-install", action="store_true", help="Skip pip install")
     parser.add_argument("--reload", action="store_true", help="Enable hot reload (dev mode)")
     args = parser.parse_args()

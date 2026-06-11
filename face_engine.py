@@ -30,7 +30,8 @@ class FaceEngine:
 
     def _read_image(self, data: bytes) -> np.ndarray:
         img = Image.open(io.BytesIO(data)).convert("RGB")
-        return np.array(img)
+        # InsightFace expects BGR (OpenCV convention)
+        return np.array(img)[:, :, ::-1]
 
     def detect_faces(self, data: bytes) -> list:
         img = self._read_image(data)

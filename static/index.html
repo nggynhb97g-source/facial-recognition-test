@@ -399,6 +399,11 @@
 function show(id)  { document.getElementById(id).classList.remove('hidden'); }
 function hide(id)  { document.getElementById(id).classList.add('hidden'); }
 function el(id)    { return document.getElementById(id); }
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 
 function toast(msg, ok=true) {
   const t = el('toast');
@@ -623,8 +628,8 @@ function renderSearchResults(data) {
         ${i === 0 ? '<span class="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-yellow-400 flex items-center justify-center text-xs font-black text-black">1</span>' : ''}
       </div>
       <div class="flex-1 min-w-0">
-        <p class="font-bold truncate">${m.name}</p>
-        <p class="text-xs mt-0.5" style="color:var(--muted)">${m.label} · ${m.similarity_pct}% match</p>
+        <p class="font-bold truncate">${escHtml(m.name)}</p>
+        <p class="text-xs mt-0.5" style="color:var(--muted)">${escHtml(m.label)} · ${m.similarity_pct}% match</p>
         <div class="mt-1.5 h-1.5 rounded-full" style="background:var(--border)">
           <div class="meter-fill ${m.is_match?'match':'no-match'}" style="width:${Math.min(m.similarity_pct,100)}%"></div>
         </div>
@@ -681,8 +686,8 @@ function renderDb(faces) {
         </button>
       </div>
       <div class="p-2">
-        <p class="font-semibold text-sm truncate">${f.name}</p>
-        <p class="text-xs mt-0.5" style="color:var(--muted)">${date} · #${f.id}</p>
+        <p class="font-semibold text-sm truncate">${escHtml(f.name)}</p>
+        <p class="text-xs mt-0.5" style="color:var(--muted)">${date} · #${escHtml(String(f.id))}</p>
       </div>`;
     grid.appendChild(card);
   });
