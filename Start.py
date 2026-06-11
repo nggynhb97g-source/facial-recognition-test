@@ -33,7 +33,14 @@ if not _inside_venv:
     os.execv(str(_VENV_PYTHON), [str(_VENV_PYTHON)] + sys.argv)
     sys.exit(0)  # unreachable — os.execv replaces the process
 
-# ── Step 2: inside venv — logging first, then everything else ────────────────
+# ── Step 2: inside venv — explicitly wire site-packages then set up logging ──
+# os.execv preserves the parent's env vars; Pterodactyl may set PYTHONPATH or
+# similar vars that prevent the venv's site module from auto-registering its
+# site-packages.  Add them explicitly so every import below is guaranteed.
+_sp = _VENV / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages"
+if _sp.exists() and str(_sp) not in sys.path:
+    sys.path.insert(0, str(_sp))
+
 sys.path.insert(0, str(ROOT))
 from logging_setup import setup
 log = setup()
