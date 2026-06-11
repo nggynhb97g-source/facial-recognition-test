@@ -1,36 +1,55 @@
 #!/usr/bin/env python3
 """
-Auto-installs all dependencies and starts the FaceID server.
-Startup command (Pterodactyl):  python Start.py
-
-Pterodactyl env vars:
-  SERVER_PORT  — port to bind (set automatically by the panel)
-  PORT         — fallback port env var
+FaceID startup — auto-bootstraps a project-local venv then installs deps.
+Pterodactyl startup command:  python Start.py
+Env vars: SERVER_PORT (Pterodactyl), PORT (fallback), default 8000.
 """
 import sys
 import os
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).parent
-sys.path.insert(0, str(ROOT))
 
-# ── Logging must be the very first thing so even pip/import errors are captured
+# ── Step 1: venv bootstrap ────────────────────────────────────────────────────
+# Run everything inside a project-local venv so pip always has a writable
+# target (avoids "site-packages not writeable" in restricted containers).
+_VENV        = ROOT / ".venv"
+_VENV_PYTHON = _VENV / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
+_VENV_PIP    = _VENV / ("Scripts/pip.exe"    if sys.platform == "win32" else "bin/pip")
+
+_inside_venv = _VENV_PYTHON.exists() and Path(sys.executable).resolve() == _VENV_PYTHON.resolve()
+
+if not _inside_venv:
+    if not _VENV_PYTHON.exists():
+        print("[FaceID] Creating virtual environment (.venv/) …", flush=True)
+        try:
+            subprocess.check_call([sys.executable, "-m", "venv", str(_VENV)])
+            print("[FaceID] Virtual environment ready.", flush=True)
+        except subprocess.CalledProcessError as exc:
+            print(f"[FaceID] FATAL: could not create venv: {exc}", flush=True)
+            sys.exit(1)
+    # Replace this process with the venv Python running the same script
+    os.execv(str(_VENV_PYTHON), [str(_VENV_PYTHON)] + sys.argv)
+    sys.exit(0)  # unreachable — os.execv replaces the process
+
+# ── Step 2: inside venv — logging first, then everything else ────────────────
+sys.path.insert(0, str(ROOT))
 from logging_setup import setup
 log = setup()
 
-import subprocess
 import argparse
 
 REQUIREMENTS = ROOT / "requirements.txt"
 
 
 def pip_install() -> None:
-    log.info("Installing Python dependencies from requirements.txt …")
+    log.info("Installing dependencies into .venv/ …")
     result = subprocess.run(
-        [sys.executable, "-m", "pip", "install", "-r", str(REQUIREMENTS)],
+        [str(_VENV_PIP), "install", "-r", str(REQUIREMENTS)],
         cwd=ROOT,
         stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,   # merge stderr into stdout
+        stderr=subprocess.STDOUT,
         text=True,
     )
     output = result.stdout.strip()
@@ -73,7 +92,7 @@ def main() -> None:
         port=args.port,
         reload=args.reload,
         log_level="info",
-        log_config=None,  # don't let uvicorn overwrite our logging config
+        log_config=None,  # preserve our logging config
     )
 
 
