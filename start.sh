@@ -31,4 +31,4 @@ echo "[FaceID] Starting server at http://localhost:8000"
 echo "[FaceID] Press Ctrl+C to stop"
 echo ""
 
-$PYTHON start.py --no-install "$@"
+$PYTHON Start.py --no-install "$@"
