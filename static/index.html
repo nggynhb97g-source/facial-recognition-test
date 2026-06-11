@@ -1,724 +1,805 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>FaceID</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>InsightFaceID</title>
   <style>
+    /* ── Design tokens ────────────────────────────────────────────────── */
     :root {
-      --accent: #7c3aed;
-      --accent-light: #a78bfa;
-      --bg: #07070f;
-      --card: #0f0f1a;
-      --card2: #161625;
-      --border: #ffffff14;
-      --text: #e2e8f0;
-      --muted: #64748b;
+      --bg:       #04080f;
+      --surf:     #080e1a;
+      --card:     #0c1420;
+      --border:   rgba(0,200,255,.14);
+      --cyan:     #00c8ff;
+      --cyan-dim: rgba(0,200,255,.08);
+      --green:    #00ff88;
+      --red:      #ff3355;
+      --amber:    #ffaa00;
+      --text:     #d8eaf5;
+      --muted:    #4a6070;
+      --font:     -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+      --mono:     'Courier New',Courier,monospace;
     }
-    * { box-sizing: border-box; }
+
+    /* ── Reset ────────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
     body {
+      font-family: var(--font);
       background: var(--bg);
       color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      min-height: 100dvh;
+      font-size: 15px;
+      line-height: 1.5;
       overflow-x: hidden;
     }
-    /* Scrollbar */
-    ::-webkit-scrollbar { width: 4px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+    button { font-family: var(--font); cursor: pointer; border: none; }
+    input  { font-family: var(--font); }
+    img    { display: block; max-width: 100%; }
 
-    /* Tabs */
-    .tab-btn { transition: all .2s; }
-    .tab-btn.active { color: var(--accent-light); }
-    .tab-btn.active .tab-icon { background: var(--accent); }
+    /* ── Scrollbar ────────────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-thumb { background: #1a2a3a; border-radius: 2px; }
+
+    /* ── Background grid ──────────────────────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image:
+        linear-gradient(rgba(0,200,255,.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,200,255,.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+
+    /* ── Layout shell ─────────────────────────────────────────────────── */
+    #app { position: relative; z-index: 1; display: flex; flex-direction: column; min-height: 100dvh; }
+    main { flex: 1; overflow-y: auto; padding: 16px 16px 100px; max-width: 640px; margin: 0 auto; width: 100%; }
+
+    /* ── Header ───────────────────────────────────────────────────────── */
+    header {
+      position: sticky; top: 0; z-index: 50;
+      background: rgba(4,8,15,.88); backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px;
+    }
+    .logo { display: flex; align-items: center; gap: 10px; }
+    .logo-mark {
+      width: 34px; height: 34px; border-radius: 8px; flex-shrink: 0;
+      background: linear-gradient(135deg,#003a55,#006688);
+      border: 1px solid var(--cyan);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .logo-mark svg { width: 18px; height: 18px; }
+    .logo-text { font-size: 13px; font-weight: 700; letter-spacing: .12em; color: var(--cyan); text-transform: uppercase; }
+    .logo-sub  { font-size: 10px; color: var(--muted); letter-spacing: .08em; }
+    #status-pill {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 11px; color: var(--muted); letter-spacing: .06em;
+      background: var(--surf); border: 1px solid var(--border);
+      padding: 5px 10px; border-radius: 20px;
+    }
+    #status-dot { width: 7px; height: 7px; border-radius: 50%; background: #223; flex-shrink: 0; }
+
+    /* ── Section headings ─────────────────────────────────────────────── */
+    .section-title {
+      font-size: 11px; font-weight: 700; letter-spacing: .14em;
+      color: var(--cyan); text-transform: uppercase;
+      display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
+    }
+    .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    /* ── Drop zone ────────────────────────────────────────────────────── */
+    .drop-zone {
+      display: block; position: relative; cursor: pointer;
+      border: 1px solid var(--border); border-radius: 12px;
+      background: var(--cyan-dim); overflow: hidden;
+      transition: border-color .2s, background .2s;
+    }
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: var(--cyan);
+      background: rgba(0,200,255,.13);
+    }
+    .drop-zone input[type=file] { display: none; }
+
+    /* corner brackets */
+    .drop-zone::before, .drop-zone::after,
+    .drop-zone .br::before, .drop-zone .br::after {
+      content: ''; position: absolute; width: 12px; height: 12px;
+      border-color: var(--cyan); border-style: solid; z-index: 2;
+      pointer-events: none;
+    }
+    .drop-zone::before  { top: 6px; left: 6px;  border-width: 2px 0 0 2px; }
+    .drop-zone::after   { top: 6px; right: 6px; border-width: 2px 2px 0 0; }
+    .drop-zone .br::before { bottom: 6px; left: 6px;  border-width: 0 0 2px 2px; }
+    .drop-zone .br::after  { bottom: 6px; right: 6px; border-width: 0 2px 2px 0; }
+
+    .drop-ph {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 8px; padding: 24px 12px;
+      pointer-events: none;
+    }
+    .drop-ph svg { width: 32px; height: 32px; opacity: .4; }
+    .drop-ph p   { font-size: 12px; color: var(--muted); text-align: center; line-height: 1.4; }
+    .drop-ph span { font-size: 11px; color: #2a4050; }
+
+    .drop-preview {
+      width: 100%; height: 100%; object-fit: cover;
+      position: absolute; inset: 0; border-radius: 11px;
+      display: none;
+    }
+    .drop-preview.active { display: block; }
+
+    /* ── Cards ────────────────────────────────────────────────────────── */
+    .card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 14px; padding: 16px;
+    }
+
+    /* ── Primary button ───────────────────────────────────────────────── */
+    .btn {
+      width: 100%; padding: 14px; border-radius: 10px;
+      font-size: 13px; font-weight: 700; letter-spacing: .1em;
+      text-transform: uppercase; transition: all .15s;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn:active { transform: scale(.97); }
+    .btn:disabled { opacity: .45; pointer-events: none; }
+    .btn-cyan  { background: linear-gradient(135deg,#004d66,#007799); color: var(--cyan); border: 1px solid var(--cyan); }
+    .btn-green { background: linear-gradient(135deg,#004422,#006633); color: var(--green); border: 1px solid var(--green); }
+    .btn-blue  { background: linear-gradient(135deg,#002244,#003366); color: #66aaff;     border: 1px solid #336699; }
+
+    /* ── Spinner ──────────────────────────────────────────────────────── */
+    .spin { animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Result banner ────────────────────────────────────────────────── */
+    .result-banner {
+      border-radius: 12px; padding: 18px 16px;
+      border: 1px solid; margin-top: 14px;
+      display: none;
+    }
+    .result-banner.show { display: block; }
+    .result-banner.match    { border-color: var(--green); background: rgba(0,255,136,.06); }
+    .result-banner.nomatch  { border-color: var(--red);   background: rgba(255,51,85,.06); }
+    .result-banner.likely   { border-color: var(--amber); background: rgba(255,170,0,.06); }
+
+    .result-verdict {
+      font-family: var(--mono); font-size: 20px; font-weight: 700;
+      letter-spacing: .12em; margin-bottom: 6px;
+    }
+    .result-pct   { font-family: var(--mono); font-size: 36px; font-weight: 900; line-height: 1; }
+    .result-label { font-size: 12px; color: var(--muted); margin-top: 4px; letter-spacing: .06em; }
+
+    .meter-track { height: 4px; background: rgba(255,255,255,.06); border-radius: 2px; margin-top: 12px; overflow: hidden; }
+    .meter-fill  { height: 100%; border-radius: 2px; transition: width 1s cubic-bezier(.4,0,.2,1); width: 0%; }
+
+    .result-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 12px; font-size: 11px; color: var(--muted); }
+    .result-meta span { color: var(--text); font-family: var(--mono); }
+
+    /* ── Error box ────────────────────────────────────────────────────── */
+    .err-box {
+      background: rgba(255,51,85,.08); border: 1px solid rgba(255,51,85,.3);
+      border-radius: 10px; padding: 12px 14px; font-size: 13px; color: #ff8899;
+      margin-top: 12px; display: none;
+    }
+    .err-box.show { display: block; }
+
+    /* ── Success box ──────────────────────────────────────────────────── */
+    .ok-box {
+      background: rgba(0,255,136,.06); border: 1px solid rgba(0,255,136,.25);
+      border-radius: 10px; padding: 12px 14px; font-size: 13px; color: var(--green);
+      margin-top: 12px; display: none;
+    }
+    .ok-box.show { display: block; }
+
+    /* ── Text input ───────────────────────────────────────────────────── */
+    .text-input {
+      width: 100%; padding: 12px 14px; border-radius: 10px;
+      background: var(--surf); border: 1px solid var(--border);
+      color: var(--text); font-size: 14px; outline: none;
+      transition: border-color .2s;
+    }
+    .text-input:focus { border-color: var(--cyan); }
+    .input-label { font-size: 11px; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 6px; display: block; }
+
+    /* ── Tabs ─────────────────────────────────────────────────────────── */
     .tab-content { display: none; }
     .tab-content.active { display: block; }
 
-    /* Upload zone */
-    .upload-zone {
-      border: 2px dashed var(--border);
-      border-radius: 16px;
-      background: var(--card2);
-      transition: all .2s;
-      cursor: pointer;
-      position: relative;
-      overflow: hidden;
+    /* ── Bottom nav ───────────────────────────────────────────────────── */
+    nav {
+      position: fixed; bottom: 0; inset-x: 0; z-index: 50;
+      background: rgba(4,8,15,.92); backdrop-filter: blur(16px);
+      border-top: 1px solid var(--border);
+      padding-bottom: env(safe-area-inset-bottom,0);
     }
-    .upload-zone:hover, .upload-zone.drag-over {
-      border-color: var(--accent);
-      background: #1a0a3a;
+    .nav-inner { max-width: 640px; margin: 0 auto; display: flex; }
+    .nav-btn {
+      flex: 1; padding: 10px 4px 8px; background: none;
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      color: var(--muted); font-size: 10px; letter-spacing: .06em; text-transform: uppercase;
+      transition: color .2s; border-top: 2px solid transparent;
     }
-    .upload-zone input[type=file] {
-      position: absolute; inset: 0;
-      opacity: 0; cursor: pointer; width: 100%; height: 100%;
-    }
-    .upload-zone .preview {
-      width: 100%; height: 100%;
-      object-fit: cover;
-      border-radius: 14px;
-    }
+    .nav-btn svg { width: 20px; height: 20px; }
+    .nav-btn.active { color: var(--cyan); border-top-color: var(--cyan); }
 
-    /* Similarity meter */
-    .meter-fill {
-      height: 100%;
-      border-radius: 999px;
-      transition: width 1s cubic-bezier(.4,0,.2,1);
-      background: linear-gradient(90deg, #7c3aed, #a78bfa);
+    /* ── Face grid (database) ─────────────────────────────────────────── */
+    .face-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(140px,1fr)); gap: 10px; }
+    .face-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 10px; overflow: hidden; position: relative;
     }
-    .meter-fill.match { background: linear-gradient(90deg, #059669, #34d399); }
-    .meter-fill.no-match { background: linear-gradient(90deg, #dc2626, #f87171); }
-
-    /* Card */
-    .card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 20px;
+    .face-card img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+    .face-card .no-img {
+      width: 100%; aspect-ratio: 1;
+      background: var(--surf); display: flex; align-items: center; justify-content: center;
     }
+    .face-card .no-img svg { width: 36px; height: 36px; opacity: .25; }
+    .face-card-info { padding: 8px 10px; }
+    .face-card-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .face-card-date { font-size: 10px; color: var(--muted); margin-top: 2px; }
+    .face-card-del {
+      position: absolute; top: 6px; right: 6px;
+      width: 26px; height: 26px; border-radius: 50%;
+      background: rgba(0,0,0,.6); backdrop-filter: blur(4px);
+      display: flex; align-items: center; justify-content: center;
+      border: none; cursor: pointer; color: var(--red); font-size: 14px;
+      transition: background .15s;
+    }
+    .face-card-del:hover { background: rgba(255,51,85,.25); }
 
-    /* Pulse loader */
-    .loader { animation: spin .8s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    /* ── Search result rows ───────────────────────────────────────────── */
+    .match-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px; background: var(--card); border: 1px solid var(--border);
+      border-radius: 10px; margin-bottom: 8px;
+    }
+    .match-row img, .match-row .no-av {
+      width: 48px; height: 48px; border-radius: 8px; object-fit: cover; flex-shrink: 0;
+    }
+    .match-row .no-av { background: var(--surf); display: flex; align-items: center; justify-content: center; }
+    .match-pct  { font-family: var(--mono); font-size: 18px; font-weight: 900; flex-shrink: 0; }
+    .match-name { font-size: 14px; font-weight: 600; }
+    .match-conf { font-size: 11px; color: var(--muted); margin-top: 2px; }
 
-    /* Toast */
+    /* ── Toast ────────────────────────────────────────────────────────── */
     #toast {
-      position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%) translateY(20px);
-      background: #1e1e32; border: 1px solid var(--border);
-      padding: 12px 20px; border-radius: 12px;
-      opacity: 0; transition: all .3s; pointer-events: none;
-      z-index: 9999; white-space: nowrap; font-size: 14px;
+      position: fixed; bottom: 78px; left: 50%; transform: translateX(-50%) translateY(10px);
+      background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+      padding: 10px 18px; font-size: 13px; white-space: nowrap;
+      opacity: 0; transition: all .25s; pointer-events: none; z-index: 999;
     }
     #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-    /* Face card grid */
-    .face-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
-
-    /* Glow on match */
-    .glow-green { box-shadow: 0 0 30px #05966944; }
-    .glow-red   { box-shadow: 0 0 30px #dc262644; }
-
-    /* Result score circle */
-    .score-ring {
-      width: 120px; height: 120px;
-      border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      flex-direction: column;
-      font-weight: 800;
-      font-size: 2rem;
-      border: 4px solid;
-      flex-shrink: 0;
-    }
-    .score-ring.match  { border-color: #34d399; color: #34d399; background: #05966916; }
-    .score-ring.nomatch { border-color: #f87171; color: #f87171; background: #dc262616; }
-
-    /* Bottom nav safe area */
-    .bottom-nav { padding-bottom: env(safe-area-inset-bottom, 0); }
+    /* ── Misc utilities ───────────────────────────────────────────────── */
+    .mt-3 { margin-top: 12px; }
+    .mt-4 { margin-top: 16px; }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .hidden { display: none !important; }
   </style>
 </head>
 <body>
+<div id="app">
 
-<!-- Header -->
-<header class="sticky top-0 z-50 flex items-center justify-between px-4 py-3"
-        style="background: rgba(7,7,15,.85); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border)">
-  <div class="flex items-center gap-2">
-    <div class="w-8 h-8 rounded-xl flex items-center justify-center" style="background: var(--accent)">
-      <svg width="18" height="18" fill="none" viewBox="0 0 24 24">
-        <path stroke="white" stroke-width="2" stroke-linecap="round"
-          d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/>
+<!-- ── Header ─────────────────────────────────────────────────────────── -->
+<header>
+  <div class="logo">
+    <div class="logo-mark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#00c8ff" stroke-width="1.5">
+        <circle cx="12" cy="8" r="4"/>
+        <path d="M3 21c0-4.418 4.03-8 9-8s9 3.582 9 8" stroke-linecap="round"/>
+        <path d="M17 3l2 2-2 2M21 5h-4" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     </div>
-    <span class="font-bold text-lg tracking-tight">FaceID</span>
+    <div>
+      <div class="logo-text">InsightFaceID</div>
+      <div class="logo-sub">BIOMETRIC ANALYSIS SYSTEM</div>
+    </div>
   </div>
-  <div id="health-dot" class="flex items-center gap-1.5 text-xs" style="color: var(--muted)">
-    <span class="w-2 h-2 rounded-full bg-gray-600" id="status-dot"></span>
-    <span id="status-text">connecting…</span>
+  <div id="status-pill">
+    <div id="status-dot"></div>
+    <span id="status-text">CONNECTING</span>
   </div>
 </header>
 
-<!-- Main -->
-<main class="pb-24 max-w-2xl mx-auto px-4 pt-5">
+<!-- ── Main content ───────────────────────────────────────────────────── -->
+<main>
 
-  <!-- ─── COMPARE TAB ─── -->
+  <!-- ══ COMPARE ══ -->
   <div class="tab-content active" id="tab-compare">
-    <h2 class="text-xl font-bold mb-1">Compare Faces</h2>
-    <p class="text-sm mb-5" style="color: var(--muted)">Upload two photos to check if they're the same person.</p>
+    <p class="section-title">Face Comparison</p>
 
-    <div class="grid grid-cols-2 gap-3 mb-4">
-      <!-- Image 1 -->
+    <div class="row2 mt-3">
+      <!-- Subject 1 -->
       <div>
-        <p class="text-xs font-semibold mb-1.5" style="color: var(--muted)">PERSON 1</p>
-        <div class="upload-zone" style="height:160px" id="zone1"
-             ondragover="handleDrag(event,'zone1')" ondragleave="clearDrag('zone1')" ondrop="handleDrop(event,'zone1','img1-preview','img1-file')">
-          <input type="file" accept="image/*,video/*" capture="environment" id="img1-file"
-                 onchange="previewFile(this,'img1-preview','zone1')" />
-          <div id="img1-placeholder" class="absolute inset-0 flex flex-col items-center justify-center gap-2">
-            <svg width="32" height="32" fill="none" viewBox="0 0 24 24">
-              <circle cx="9" cy="7" r="4" stroke="#7c3aed" stroke-width="1.5"/>
-              <path d="M3 21c0-3.314 2.686-6 6-6s6 2.686 6 6" stroke="#7c3aed" stroke-width="1.5" stroke-linecap="round"/>
-              <path d="M18 8v8m-4-4h8" stroke="#a78bfa" stroke-width="1.5" stroke-linecap="round"/>
+        <div class="input-label">Subject 1</div>
+        <label class="drop-zone" id="zone1" for="file1" style="min-height:160px"
+               ondragover="onDragOver(event,'zone1')" ondragleave="onDragLeave('zone1')" ondrop="onDrop(event,'zone1','file1','prev1','ph1')">
+          <input type="file" id="file1" accept="image/*" onchange="onFileChange('file1','prev1','ph1')">
+          <div class="drop-ph" id="ph1">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+              <circle cx="12" cy="8" r="4"/><path d="M3 21c0-4 4-7 9-7s9 3 9 7" stroke-linecap="round"/>
             </svg>
-            <span class="text-xs text-center px-2" style="color:var(--muted)">Tap or drop<br/>photo</span>
+            <p>Tap to upload<br>or drag photo</p>
           </div>
-          <img id="img1-preview" class="preview hidden absolute inset-0" />
-        </div>
+          <img id="prev1" class="drop-preview">
+          <span class="br"></span>
+        </label>
       </div>
-      <!-- Image 2 -->
+      <!-- Subject 2 -->
       <div>
-        <p class="text-xs font-semibold mb-1.5" style="color: var(--muted)">PERSON 2</p>
-        <div class="upload-zone" style="height:160px" id="zone2"
-             ondragover="handleDrag(event,'zone2')" ondragleave="clearDrag('zone2')" ondrop="handleDrop(event,'zone2','img2-preview','img2-file')">
-          <input type="file" accept="image/*,video/*" capture="environment" id="img2-file"
-                 onchange="previewFile(this,'img2-preview','zone2')" />
-          <div id="img2-placeholder" class="absolute inset-0 flex flex-col items-center justify-center gap-2">
-            <svg width="32" height="32" fill="none" viewBox="0 0 24 24">
-              <circle cx="9" cy="7" r="4" stroke="#7c3aed" stroke-width="1.5"/>
-              <path d="M3 21c0-3.314 2.686-6 6-6s6 2.686 6 6" stroke="#7c3aed" stroke-width="1.5" stroke-linecap="round"/>
-              <path d="M18 8v8m-4-4h8" stroke="#a78bfa" stroke-width="1.5" stroke-linecap="round"/>
+        <div class="input-label">Subject 2</div>
+        <label class="drop-zone" id="zone2" for="file2" style="min-height:160px"
+               ondragover="onDragOver(event,'zone2')" ondragleave="onDragLeave('zone2')" ondrop="onDrop(event,'zone2','file2','prev2','ph2')">
+          <input type="file" id="file2" accept="image/*" onchange="onFileChange('file2','prev2','ph2')">
+          <div class="drop-ph" id="ph2">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+              <circle cx="12" cy="8" r="4"/><path d="M3 21c0-4 4-7 9-7s9 3 9 7" stroke-linecap="round"/>
             </svg>
-            <span class="text-xs text-center px-2" style="color:var(--muted)">Tap or drop<br/>photo</span>
+            <p>Tap to upload<br>or drag photo</p>
           </div>
-          <img id="img2-preview" class="preview hidden absolute inset-0" />
-        </div>
+          <img id="prev2" class="drop-preview">
+          <span class="br"></span>
+        </label>
       </div>
     </div>
 
-    <button id="compare-btn" onclick="compareFaces()"
-      class="w-full py-4 rounded-2xl font-bold text-base tracking-wide transition-all active:scale-95"
-      style="background: linear-gradient(135deg,#7c3aed,#a855f7); color:white">
-      <span id="compare-btn-text">COMPARE FACES</span>
-      <svg id="compare-spinner" class="loader inline-block ml-2 hidden w-5 h-5" viewBox="0 0 24 24" fill="none">
-        <circle cx="12" cy="12" r="10" stroke="white" stroke-width="3" stroke-dasharray="40 20"/>
-      </svg>
-    </button>
+    <div class="mt-4">
+      <button class="btn btn-cyan" id="cmp-btn" onclick="doCompare()">
+        <svg id="cmp-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4" stroke-linecap="round"/>
+        </svg>
+        <svg id="cmp-spin" class="spin hidden" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10" stroke-dasharray="40 20"/>
+        </svg>
+        <span id="cmp-txt">Run Comparison</span>
+      </button>
+    </div>
 
-    <!-- Result -->
-    <div id="compare-result" class="hidden mt-5 card">
-      <div class="flex items-center gap-4">
-        <div class="score-ring" id="result-ring">
-          <span id="result-pct">0%</span>
-          <span class="text-xs font-semibold mt-0.5" id="result-label-small">SIM</span>
+    <div class="result-banner" id="cmp-result">
+      <div style="display:flex;align-items:center;gap:14px">
+        <div>
+          <div class="result-pct" id="r-pct">0%</div>
+          <div class="result-label">SIMILARITY SCORE</div>
         </div>
-        <div class="flex-1">
-          <p class="text-2xl font-black mb-1" id="result-label">—</p>
-          <p class="text-sm" style="color:var(--muted)" id="result-confidence"></p>
-          <div class="mt-2 h-2 rounded-full" style="background:var(--border)">
-            <div class="meter-fill" id="result-meter" style="width:0%"></div>
+        <div style="flex:1">
+          <div class="result-verdict" id="r-verdict">—</div>
+          <div class="result-label" id="r-conf">—</div>
+          <div class="meter-track mt-3">
+            <div class="meter-fill" id="r-meter"></div>
           </div>
         </div>
       </div>
-      <div class="mt-4 grid grid-cols-2 gap-2 text-xs" style="color:var(--muted)">
-        <div>Faces in img 1: <span class="text-white font-semibold" id="r-fc1">—</span></div>
-        <div>Faces in img 2: <span class="text-white font-semibold" id="r-fc2">—</span></div>
-        <div>Det. score 1: <span class="text-white font-semibold" id="r-ds1">—</span></div>
-        <div>Det. score 2: <span class="text-white font-semibold" id="r-ds2">—</span></div>
+      <div class="result-meta mt-3">
+        <div>Faces in #1 <span id="r-fc1">—</span></div>
+        <div>Faces in #2 <span id="r-fc2">—</span></div>
+        <div>Det.score #1 <span id="r-ds1">—</span></div>
+        <div>Det.score #2 <span id="r-ds2">—</span></div>
       </div>
     </div>
+    <div class="err-box" id="cmp-err"></div>
+  </div>
 
-    <!-- Error -->
-    <div id="compare-error" class="hidden mt-4 p-4 rounded-xl text-sm"
-         style="background:#dc262620;border:1px solid #dc262644;color:#fca5a5">
+  <!-- ══ ENROLL ══ -->
+  <div class="tab-content" id="tab-enroll">
+    <p class="section-title">Enroll Subject</p>
+
+    <label class="drop-zone" id="zone-enr" for="file-enr" style="min-height:200px;display:block;max-width:280px;margin:0 auto"
+           ondragover="onDragOver(event,'zone-enr')" ondragleave="onDragLeave('zone-enr')" ondrop="onDrop(event,'zone-enr','file-enr','prev-enr','ph-enr')">
+      <input type="file" id="file-enr" accept="image/*" onchange="onFileChange('file-enr','prev-enr','ph-enr')">
+      <div class="drop-ph" id="ph-enr">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" style="width:40px;height:40px">
+          <circle cx="12" cy="8" r="4"/><path d="M3 21c0-4 4-7 9-7s9 3 9 7" stroke-linecap="round"/>
+          <path d="M18 4v6m-3-3h6" stroke-linecap="round"/>
+        </svg>
+        <p>Upload face photo</p>
+        <span>JPG · PNG · WEBP</span>
+      </div>
+      <img id="prev-enr" class="drop-preview">
+      <span class="br"></span>
+    </label>
+
+    <div class="mt-4">
+      <label class="input-label" for="enr-name">Full Name / ID</label>
+      <input class="text-input" id="enr-name" type="text" placeholder="e.g. Jane Smith" autocomplete="off" spellcheck="false">
+    </div>
+
+    <div class="mt-4">
+      <button class="btn btn-green" id="enr-btn" onclick="doEnroll()">
+        <svg id="enr-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+        </svg>
+        <svg id="enr-spin" class="spin hidden" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10" stroke-dasharray="40 20"/>
+        </svg>
+        <span id="enr-txt">Enroll to Database</span>
+      </button>
+    </div>
+
+    <div class="ok-box" id="enr-ok"></div>
+    <div class="err-box" id="enr-err"></div>
+  </div>
+
+  <!-- ══ IDENTIFY ══ -->
+  <div class="tab-content" id="tab-id">
+    <p class="section-title">Identify Subject</p>
+
+    <label class="drop-zone" id="zone-id" for="file-id" style="min-height:200px;display:block;max-width:280px;margin:0 auto"
+           ondragover="onDragOver(event,'zone-id')" ondragleave="onDragLeave('zone-id')" ondrop="onDrop(event,'zone-id','file-id','prev-id','ph-id')">
+      <input type="file" id="file-id" accept="image/*" onchange="onFileChange('file-id','prev-id','ph-id')">
+      <div class="drop-ph" id="ph-id">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" style="width:40px;height:40px">
+          <circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
+        </svg>
+        <p>Upload photo to identify</p>
+        <span>Searches enrolled database</span>
+      </div>
+      <img id="prev-id" class="drop-preview">
+      <span class="br"></span>
+    </label>
+
+    <div class="mt-4">
+      <button class="btn btn-blue" id="id-btn" onclick="doIdentify()">
+        <svg id="id-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4" stroke-linecap="round"/>
+        </svg>
+        <svg id="id-spin" class="spin hidden" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10" stroke-dasharray="40 20"/>
+        </svg>
+        <span id="id-txt">Search Database</span>
+      </button>
+    </div>
+
+    <div class="err-box" id="id-err"></div>
+    <div id="id-results" class="mt-4 hidden">
+      <p class="section-title">Results · <span id="id-count">0</span> match(es)</p>
+      <div id="id-list"></div>
     </div>
   </div>
 
-  <!-- ─── ADD TAB ─── -->
-  <div class="tab-content" id="tab-add">
-    <h2 class="text-xl font-bold mb-1">Add to Database</h2>
-    <p class="text-sm mb-5" style="color:var(--muted)">Tag a face with a name and save it for future recognition.</p>
-
-    <div class="upload-zone mx-auto mb-4" style="height:220px;max-width:280px" id="zone-add"
-         ondragover="handleDrag(event,'zone-add')" ondragleave="clearDrag('zone-add')"
-         ondrop="handleDrop(event,'zone-add','add-preview','add-file')">
-      <input type="file" accept="image/*,video/*" capture="environment" id="add-file"
-             onchange="previewFile(this,'add-preview','zone-add')" />
-      <div id="add-placeholder" class="absolute inset-0 flex flex-col items-center justify-center gap-3">
-        <div class="w-16 h-16 rounded-full flex items-center justify-center" style="background:var(--card2)">
-          <svg width="32" height="32" fill="none" viewBox="0 0 24 24">
-            <circle cx="12" cy="8" r="4" stroke="#7c3aed" stroke-width="1.5"/>
-            <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="#7c3aed" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <span class="text-sm font-medium" style="color:var(--muted)">Upload face photo</span>
-        <span class="text-xs" style="color:var(--muted)">JPG, PNG, WebP</span>
-      </div>
-      <img id="add-preview" class="preview hidden absolute inset-0" />
-    </div>
-
-    <div class="mb-4">
-      <label class="block text-xs font-semibold mb-2 tracking-wide" style="color:var(--muted)">PERSON'S NAME</label>
-      <input id="add-name" type="text" placeholder="e.g. Jane Smith"
-        class="w-full px-4 py-3 rounded-xl text-base font-medium outline-none"
-        style="background:var(--card2);border:1px solid var(--border);color:var(--text)"
-        onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
-      />
-    </div>
-
-    <button id="add-btn" onclick="addFace()"
-      class="w-full py-4 rounded-2xl font-bold text-base tracking-wide transition-all active:scale-95"
-      style="background:linear-gradient(135deg,#059669,#10b981);color:white">
-      <span id="add-btn-text">ADD TO DATABASE</span>
-      <svg id="add-spinner" class="loader inline-block ml-2 hidden w-5 h-5" viewBox="0 0 24 24" fill="none">
-        <circle cx="12" cy="12" r="10" stroke="white" stroke-width="3" stroke-dasharray="40 20"/>
-      </svg>
-    </button>
-
-    <div id="add-result" class="hidden mt-4 p-4 rounded-xl text-sm"
-         style="background:#05966920;border:1px solid #05966944;color:#6ee7b7"></div>
-    <div id="add-error" class="hidden mt-4 p-4 rounded-xl text-sm"
-         style="background:#dc262620;border:1px solid #dc262644;color:#fca5a5"></div>
-  </div>
-
-  <!-- ─── SEARCH TAB ─── -->
-  <div class="tab-content" id="tab-search">
-    <h2 class="text-xl font-bold mb-1">Identify Face</h2>
-    <p class="text-sm mb-5" style="color:var(--muted)">Search the database to find who this person is.</p>
-
-    <div class="upload-zone mx-auto mb-4" style="height:200px;max-width:280px" id="zone-search"
-         ondragover="handleDrag(event,'zone-search')" ondragleave="clearDrag('zone-search')"
-         ondrop="handleDrop(event,'zone-search','search-preview','search-file')">
-      <input type="file" accept="image/*,video/*" capture="environment" id="search-file"
-             onchange="previewFile(this,'search-preview','zone-search')" />
-      <div id="search-placeholder" class="absolute inset-0 flex flex-col items-center justify-center gap-3">
-        <div class="w-14 h-14 rounded-full flex items-center justify-center" style="background:var(--card2)">
-          <svg width="28" height="28" fill="none" viewBox="0 0 24 24">
-            <circle cx="11" cy="11" r="7" stroke="#7c3aed" stroke-width="1.5"/>
-            <path d="M16.5 16.5l4 4" stroke="#a78bfa" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <span class="text-sm" style="color:var(--muted)">Upload photo to search</span>
-      </div>
-      <img id="search-preview" class="preview hidden absolute inset-0" />
-    </div>
-
-    <button id="search-btn" onclick="searchFace()"
-      class="w-full py-4 rounded-2xl font-bold text-base tracking-wide mb-4 transition-all active:scale-95"
-      style="background:linear-gradient(135deg,#0369a1,#38bdf8);color:white">
-      <span id="search-btn-text">SEARCH DATABASE</span>
-      <svg id="search-spinner" class="loader inline-block ml-2 hidden w-5 h-5" viewBox="0 0 24 24" fill="none">
-        <circle cx="12" cy="12" r="10" stroke="white" stroke-width="3" stroke-dasharray="40 20"/>
-      </svg>
-    </button>
-
-    <div id="search-error" class="hidden mb-4 p-4 rounded-xl text-sm"
-         style="background:#dc262620;border:1px solid #dc262644;color:#fca5a5"></div>
-
-    <div id="search-results" class="hidden">
-      <p class="text-sm font-semibold mb-3" style="color:var(--muted)">
-        RESULTS · <span id="search-count">0</span> match(es) found
-      </p>
-      <div id="search-list" class="flex flex-col gap-3"></div>
-    </div>
-  </div>
-
-  <!-- ─── DATABASE TAB ─── -->
+  <!-- ══ DATABASE ══ -->
   <div class="tab-content" id="tab-db">
-    <div class="flex items-center justify-between mb-1">
-      <h2 class="text-xl font-bold">Database</h2>
-      <span id="db-count-badge" class="text-xs px-2.5 py-1 rounded-full font-semibold"
-            style="background:var(--card2);color:var(--muted)">0 faces</span>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <p class="section-title" style="margin-bottom:0;flex:1">Enrolled Subjects</p>
+      <span id="db-badge" style="font-size:11px;color:var(--muted);padding:4px 10px;background:var(--surf);border:1px solid var(--border);border-radius:20px;margin-left:10px">0</span>
     </div>
-    <p class="text-sm mb-4" style="color:var(--muted)">All saved face embeddings and tagged images.</p>
 
-    <!-- Search bar -->
-    <div class="relative mb-5">
-      <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" fill="none" viewBox="0 0 24 24" style="color:var(--muted)">
-        <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.5"/>
-        <path d="M16.5 16.5l4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    <input class="text-input" id="db-filter" type="text" placeholder="Filter by name…"
+           style="margin-bottom:14px" oninput="filterDb(this.value)">
+
+    <div id="db-empty" class="hidden" style="text-align:center;padding:48px 0;color:var(--muted)">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="margin:0 auto 12px;opacity:.3">
+        <ellipse cx="12" cy="7" rx="9" ry="3"/><path d="M3 7v5c0 1.657 4.03 3 9 3s9-1.343 9-3V7"/>
+        <path d="M3 12v5c0 1.657 4.03 3 9 3s9-1.343 9-3v-5"/>
       </svg>
-      <input id="db-search" type="text" placeholder="Filter by name…"
-        class="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm outline-none"
-        style="background:var(--card2);border:1px solid var(--border);color:var(--text)"
-        oninput="filterDb(this.value)" />
+      <p style="font-size:13px">No subjects enrolled.<br>Use the Enroll tab to add faces.</p>
     </div>
-
-    <div id="db-empty" class="hidden text-center py-16" style="color:var(--muted)">
-      <svg class="w-12 h-12 mx-auto mb-3 opacity-30" fill="none" viewBox="0 0 24 24">
-        <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.5"/>
-        <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-      </svg>
-      <p class="text-sm">No faces saved yet.<br/>Add some in the Add tab.</p>
-    </div>
-
-    <div id="face-grid" class="face-grid"></div>
+    <div class="face-grid" id="face-grid"></div>
   </div>
 
 </main>
 
-<!-- Bottom Navigation -->
-<nav class="bottom-nav fixed bottom-0 inset-x-0 z-50"
-     style="background:rgba(7,7,15,.9);backdrop-filter:blur(16px);border-top:1px solid var(--border)">
-  <div class="max-w-2xl mx-auto flex">
-    <button class="tab-btn active flex-1 flex flex-col items-center gap-1 py-3"
-            onclick="switchTab('compare',this)">
-      <div class="tab-icon w-7 h-7 rounded-lg flex items-center justify-center" style="background:var(--accent)">
-        <svg width="16" height="16" fill="none" viewBox="0 0 24 24">
-          <path stroke="white" stroke-width="2" stroke-linecap="round" d="M8 6h8M8 12h8M8 18h4"/>
-        </svg>
-      </div>
-      <span class="text-xs font-medium">Compare</span>
+<!-- ── Bottom nav ─────────────────────────────────────────────────────── -->
+<nav>
+  <div class="nav-inner">
+    <button class="nav-btn active" id="nb-compare" onclick="switchTab('compare',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <circle cx="9" cy="9" r="5"/><circle cx="15" cy="15" r="5"/>
+      </svg>
+      Compare
     </button>
-    <button class="tab-btn flex-1 flex flex-col items-center gap-1 py-3"
-            onclick="switchTab('add',this)">
-      <div class="tab-icon w-7 h-7 rounded-lg flex items-center justify-center" style="background:var(--card2)">
-        <svg width="16" height="16" fill="none" viewBox="0 0 24 24">
-          <path stroke="#64748b" stroke-width="2" stroke-linecap="round" d="M12 5v14M5 12h14"/>
-        </svg>
-      </div>
-      <span class="text-xs font-medium" style="color:var(--muted)">Add</span>
+    <button class="nav-btn" id="nb-enroll" onclick="switchTab('enroll',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <circle cx="12" cy="8" r="4"/><path d="M3 21c0-4 4-7 9-7s9 3 9 7" stroke-linecap="round"/>
+        <path d="M18 4v6m-3-3h6" stroke-linecap="round"/>
+      </svg>
+      Enroll
     </button>
-    <button class="tab-btn flex-1 flex flex-col items-center gap-1 py-3"
-            onclick="switchTab('search',this)">
-      <div class="tab-icon w-7 h-7 rounded-lg flex items-center justify-center" style="background:var(--card2)">
-        <svg width="16" height="16" fill="none" viewBox="0 0 24 24">
-          <circle cx="11" cy="11" r="6" stroke="#64748b" stroke-width="2"/>
-          <path stroke="#64748b" stroke-width="2" stroke-linecap="round" d="M16 16l3 3"/>
-        </svg>
-      </div>
-      <span class="text-xs font-medium" style="color:var(--muted)">Search</span>
+    <button class="nav-btn" id="nb-id" onclick="switchTab('id',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4" stroke-linecap="round"/>
+      </svg>
+      Identify
     </button>
-    <button class="tab-btn flex-1 flex flex-col items-center gap-1 py-3"
-            onclick="switchTab('db',this);loadDb()">
-      <div class="tab-icon w-7 h-7 rounded-lg flex items-center justify-center" style="background:var(--card2)">
-        <svg width="16" height="16" fill="none" viewBox="0 0 24 24">
-          <ellipse cx="12" cy="6" rx="8" ry="3" stroke="#64748b" stroke-width="2"/>
-          <path stroke="#64748b" stroke-width="2" d="M4 6v6c0 1.657 3.582 3 8 3s8-1.343 8-3V6"/>
-          <path stroke="#64748b" stroke-width="2" d="M4 12v6c0 1.657 3.582 3 8 3s8-1.343 8-3v-6"/>
-        </svg>
-      </div>
-      <span class="text-xs font-medium" style="color:var(--muted)">Database</span>
+    <button class="nav-btn" id="nb-db" onclick="switchTab('db',this);loadDb()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <ellipse cx="12" cy="7" rx="9" ry="3"/>
+        <path d="M3 7v5c0 1.657 4.03 3 9 3s9-1.343 9-3V7"/>
+        <path d="M3 12v5c0 1.657 4.03 3 9 3s9-1.343 9-3v-5"/>
+      </svg>
+      Database
     </button>
   </div>
 </nav>
 
-<!-- Toast -->
+</div><!-- #app -->
+
 <div id="toast"></div>
 
 <script>
-/* ── Utilities ── */
-function show(id)  { document.getElementById(id).classList.remove('hidden'); }
-function hide(id)  { document.getElementById(id).classList.add('hidden'); }
-function el(id)    { return document.getElementById(id); }
-function escHtml(s) {
-  return String(s)
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+/* ── Helpers ─────────────────────────────────────────────────────────── */
+const $  = id => document.getElementById(id);
+const show = id => $(id).classList.remove('hidden');
+const hide = id => $(id).classList.add('hidden');
 
-function toast(msg, ok=true) {
-  const t = el('toast');
+function toast(msg, ok = true) {
+  const t = $('toast');
   t.textContent = msg;
-  t.style.borderColor = ok ? '#05966944' : '#dc262644';
+  t.style.borderColor = ok ? 'rgba(0,255,136,.3)' : 'rgba(255,51,85,.3)';
   t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 3000);
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove('show'), 2800);
 }
 
-/* ── Tab switching ── */
-function switchTab(name, btn) {
-  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.tab-btn').forEach(b => {
-    b.classList.remove('active');
-    b.querySelector('span').style.color = 'var(--muted)';
-    b.querySelector('.tab-icon').style.background = 'var(--card2)';
-    b.querySelector('.tab-icon svg path, .tab-icon svg circle, .tab-icon svg ellipse')
-     && b.querySelectorAll('.tab-icon svg *').forEach(s => { s.setAttribute('stroke', '#64748b'); });
-  });
-  el('tab-' + name).classList.add('active');
-  btn.classList.add('active');
-  btn.querySelector('span').style.color = '';
-  btn.querySelector('.tab-icon').style.background = 'var(--accent)';
-}
-
-/* ── File upload & preview ── */
-function previewFile(input, previewId, zoneId) {
-  if (!input.files || !input.files[0]) return;
-  const url = URL.createObjectURL(input.files[0]);
-  const img = el(previewId);
-  img.src = url;
-  img.classList.remove('hidden');
-  // hide placeholder
-  const zone = el(zoneId);
-  const ph = zone.querySelector('[id$="-placeholder"], [id^="img"]');
-  zone.querySelectorAll(':not(input):not(img)').forEach(c => c.style.display = 'none');
-}
-
-function handleDrag(e, zoneId) {
-  e.preventDefault();
-  el(zoneId).classList.add('drag-over');
-}
-function clearDrag(zoneId) { el(zoneId).classList.remove('drag-over'); }
-function handleDrop(e, zoneId, previewId, inputId) {
-  e.preventDefault();
-  clearDrag(zoneId);
-  const file = e.dataTransfer.files[0];
-  if (!file) return;
-  const input = el(inputId);
-  const dt = new DataTransfer();
-  dt.items.add(file);
-  input.files = dt.files;
-  previewFile(input, previewId, zoneId);
-}
-
-/* ── Health check ── */
+/* ── Status ──────────────────────────────────────────────────────────── */
 async function checkHealth() {
   try {
     const r = await fetch('/api/health');
     if (r.ok) {
-      el('status-dot').className = 'w-2 h-2 rounded-full bg-green-400';
-      el('status-text').textContent = 'ready';
-    } else throw new Error();
+      $('status-dot').style.background = 'var(--green)';
+      $('status-text').textContent = 'ONLINE';
+    } else throw 0;
   } catch {
-    el('status-dot').className = 'w-2 h-2 rounded-full bg-red-400';
-    el('status-text').textContent = 'offline';
+    $('status-dot').style.background = 'var(--red)';
+    $('status-text').textContent = 'OFFLINE';
   }
 }
 checkHealth();
 setInterval(checkHealth, 30000);
 
-/* ── Compare ── */
-async function compareFaces() {
-  const f1 = el('img1-file').files[0];
-  const f2 = el('img2-file').files[0];
-  if (!f1 || !f2) { toast('Please upload both images', false); return; }
+/* ── Tabs ────────────────────────────────────────────────────────────── */
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+  $('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+}
 
-  hide('compare-result'); hide('compare-error');
-  el('compare-btn').disabled = true;
-  show('compare-spinner');
-  el('compare-btn-text').textContent = 'Analysing…';
+/* ── File upload / preview ───────────────────────────────────────────── */
+function onFileChange(inputId, previewId, phId) {
+  const file = $(inputId).files[0];
+  if (!file) return;
+  const prev = $(previewId);
+  prev.src = URL.createObjectURL(file);
+  prev.classList.add('active');
+  $(phId).style.display = 'none';
+}
 
-  const fd = new FormData();
-  fd.append('image1', f1);
-  fd.append('image2', f2);
+function onDragOver(e, zoneId) {
+  e.preventDefault();
+  $(zoneId).classList.add('drag-over');
+}
+function onDragLeave(zoneId) {
+  $(zoneId).classList.remove('drag-over');
+}
+function onDrop(e, zoneId, inputId, previewId, phId) {
+  e.preventDefault();
+  $(zoneId).classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (!file || !file.type.startsWith('image/')) return;
+  const dt = new DataTransfer();
+  dt.items.add(file);
+  $(inputId).files = dt.files;
+  onFileChange(inputId, previewId, phId);
+}
+
+/* ── Button loading state ────────────────────────────────────────────── */
+function setLoading(prefix, loading, label) {
+  $(prefix + '-btn').disabled = loading;
+  $(prefix + '-ico')[loading ? 'classList' : 'classList'][loading ? 'add' : 'remove']('hidden');
+  $(prefix + '-spin')[loading ? 'classList' : 'classList'][loading ? 'remove' : 'add']('hidden');
+  $(prefix + '-txt').textContent = loading ? 'Processing…' : label;
+}
+// cleaner version
+function setBusy(btnId, icoId, spinId, txtId, busy, idleLabel) {
+  $(btnId).disabled = busy;
+  busy ? $(icoId).classList.add('hidden')    : $(icoId).classList.remove('hidden');
+  busy ? $(spinId).classList.remove('hidden') : $(spinId).classList.add('hidden');
+  $(txtId).textContent = busy ? 'Processing…' : idleLabel;
+}
+
+/* ── Compare ─────────────────────────────────────────────────────────── */
+async function doCompare() {
+  const f1 = $('file1').files[0];
+  const f2 = $('file2').files[0];
+  $('cmp-err').classList.remove('show');
+  $('cmp-result').classList.remove('show');
+
+  if (!f1) { showErr('cmp-err', 'Please upload Subject 1 image.'); return; }
+  if (!f2) { showErr('cmp-err', 'Please upload Subject 2 image.'); return; }
+
+  setBusy('cmp-btn','cmp-ico','cmp-spin','cmp-txt', true, 'Run Comparison');
 
   try {
+    const fd = new FormData();
+    fd.append('image1', f1);
+    fd.append('image2', f2);
     const res = await fetch('/api/compare', { method: 'POST', body: fd });
-    const data = await res.json();
-
-    if (!res.ok) {
-      el('compare-error').textContent = '⚠ ' + (data.detail || 'Unknown error');
-      show('compare-error');
-    } else {
-      renderCompareResult(data);
-      show('compare-result');
-    }
-  } catch (e) {
-    el('compare-error').textContent = '⚠ Network error — is the server running?';
-    show('compare-error');
+    const d = await res.json();
+    if (!res.ok) { showErr('cmp-err', d.detail || 'Server error'); return; }
+    renderCompare(d);
+  } catch {
+    showErr('cmp-err', 'Network error — is the server reachable?');
   } finally {
-    el('compare-btn').disabled = false;
-    hide('compare-spinner');
-    el('compare-btn-text').textContent = 'COMPARE FACES';
+    setBusy('cmp-btn','cmp-ico','cmp-spin','cmp-txt', false, 'Run Comparison');
   }
 }
 
-function renderCompareResult(d) {
-  const isMatch = d.is_match;
+function renderCompare(d) {
   const pct = d.similarity_pct;
+  const el = $('cmp-result');
 
-  el('result-pct').textContent = pct.toFixed(0) + '%';
-  el('result-label').textContent = d.label;
-  el('result-confidence').textContent = d.confidence + ' confidence · cosine sim ' + d.similarity.toFixed(3);
-  el('r-fc1').textContent = d.face_count_1;
-  el('r-fc2').textContent = d.face_count_2;
-  el('r-ds1').textContent = d.det_score_1;
-  el('r-ds2').textContent = d.det_score_2;
+  $('r-pct').textContent   = pct.toFixed(1) + '%';
+  $('r-verdict').textContent = d.label;
+  $('r-conf').textContent  = d.confidence + ' confidence · cosine ' + d.similarity.toFixed(4);
+  $('r-fc1').textContent   = d.face_count_1;
+  $('r-fc2').textContent   = d.face_count_2;
+  $('r-ds1').textContent   = d.det_score_1;
+  $('r-ds2').textContent   = d.det_score_2;
 
-  const ring = el('result-ring');
-  ring.className = 'score-ring ' + (isMatch ? 'match' : 'nomatch');
+  el.className = 'result-banner show ' + (d.is_match ? (pct >= 60 ? 'match' : 'likely') : 'nomatch');
+  $('r-pct').style.color    = d.is_match ? (pct >= 60 ? 'var(--green)' : 'var(--amber)') : 'var(--red)';
+  $('r-verdict').style.color = $('r-pct').style.color;
 
-  const meter = el('result-meter');
-  meter.className = 'meter-fill ' + (isMatch ? 'match' : 'no-match');
-  setTimeout(() => { meter.style.width = Math.min(pct, 100) + '%'; }, 50);
-
-  const card = document.querySelector('#compare-result');
-  card.className = 'card mt-5 ' + (isMatch ? 'glow-green' : 'glow-red');
+  const meter = $('r-meter');
+  meter.style.background = d.is_match ? (pct >= 60 ? 'var(--green)' : 'var(--amber)') : 'var(--red)';
+  meter.style.width = '0%';
+  setTimeout(() => { meter.style.width = Math.min(pct, 100) + '%'; }, 30);
 }
 
-/* ── Add face ── */
-async function addFace() {
-  const file = el('add-file').files[0];
-  const name = el('add-name').value.trim();
-  if (!file) { toast('Please upload a photo', false); return; }
-  if (!name) { toast('Please enter a name', false); return; }
+/* ── Enroll ──────────────────────────────────────────────────────────── */
+async function doEnroll() {
+  const file = $('file-enr').files[0];
+  const name = $('enr-name').value.trim();
+  $('enr-err').classList.remove('show');
+  $('enr-ok').classList.remove('show');
 
-  hide('add-result'); hide('add-error');
-  el('add-btn').disabled = true;
-  show('add-spinner');
-  el('add-btn-text').textContent = 'Saving…';
+  if (!file) { showErr('enr-err', 'Please upload a face photo.'); return; }
+  if (!name)  { showErr('enr-err', 'Please enter a name or ID.'); return; }
 
-  const fd = new FormData();
-  fd.append('image', file);
-  fd.append('name', name);
+  setBusy('enr-btn','enr-ico','enr-spin','enr-txt', true, 'Enroll to Database');
 
   try {
+    const fd = new FormData();
+    fd.append('image', file);
+    fd.append('name', name);
     const res = await fetch('/api/add', { method: 'POST', body: fd });
-    const data = await res.json();
-    if (!res.ok) {
-      el('add-error').textContent = '⚠ ' + (data.detail || 'Unknown error');
-      show('add-error');
-    } else {
-      el('add-result').textContent = `✓ ${data.name} added (ID #${data.id})`;
-      show('add-result');
-      toast('Face saved to database');
-      // reset
-      el('add-name').value = '';
-      el('add-file').value = '';
-      el('add-preview').classList.add('hidden');
-      el('add-placeholder').style.display = '';
-    }
+    const d = await res.json();
+    if (!res.ok) { showErr('enr-err', d.detail || 'Server error'); return; }
+
+    $('enr-ok').textContent = `✓ ${d.name} enrolled — ID #${d.id}`;
+    $('enr-ok').classList.add('show');
+    toast('Subject enrolled');
+
+    // reset form
+    $('file-enr').value = '';
+    $('prev-enr').classList.remove('active');
+    $('prev-enr').src = '';
+    $('ph-enr').style.display = '';
+    $('enr-name').value = '';
   } catch {
-    el('add-error').textContent = '⚠ Network error — is the server running?';
-    show('add-error');
+    showErr('enr-err', 'Network error.');
   } finally {
-    el('add-btn').disabled = false;
-    hide('add-spinner');
-    el('add-btn-text').textContent = 'ADD TO DATABASE';
+    setBusy('enr-btn','enr-ico','enr-spin','enr-txt', false, 'Enroll to Database');
   }
 }
 
-/* ── Search face ── */
-async function searchFace() {
-  const file = el('search-file').files[0];
-  if (!file) { toast('Please upload a photo', false); return; }
+/* ── Identify ────────────────────────────────────────────────────────── */
+async function doIdentify() {
+  const file = $('file-id').files[0];
+  $('id-err').classList.remove('show');
+  hide('id-results');
 
-  hide('search-results'); hide('search-error');
-  el('search-btn').disabled = true;
-  show('search-spinner');
-  el('search-btn-text').textContent = 'Searching…';
+  if (!file) { showErr('id-err', 'Please upload a face photo.'); return; }
 
-  const fd = new FormData();
-  fd.append('image', file);
+  setBusy('id-btn','id-ico','id-spin','id-txt', true, 'Search Database');
 
   try {
+    const fd = new FormData();
+    fd.append('image', file);
     const res = await fetch('/api/search', { method: 'POST', body: fd });
-    const data = await res.json();
-    if (!res.ok) {
-      el('search-error').textContent = '⚠ ' + (data.detail || 'Unknown error');
-      show('search-error');
+    const d = await res.json();
+    if (!res.ok) { showErr('id-err', d.detail || 'Server error'); return; }
+
+    $('id-count').textContent = d.total;
+    const list = $('id-list');
+    list.innerHTML = '';
+
+    if (d.total === 0) {
+      list.innerHTML = '<p style="text-align:center;color:var(--muted);font-size:13px;padding:20px 0">No matches found in database.</p>';
     } else {
-      renderSearchResults(data);
-      show('search-results');
+      d.matches.forEach((m, i) => {
+        const color = m.is_match ? (m.similarity_pct >= 60 ? 'var(--green)' : 'var(--amber)') : 'var(--red)';
+        const row = document.createElement('div');
+        row.className = 'match-row';
+        row.innerHTML = `
+          ${m.image_url
+            ? `<img src="${m.image_url}" alt="">`
+            : `<div class="no-av"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M3 21c0-4 4-7 9-7s9 3 9 7" stroke-linecap="round"/></svg></div>`}
+          <div style="flex:1;min-width:0">
+            <div class="match-name">${escHtml(m.name)}</div>
+            <div class="match-conf">${escHtml(m.label)} · ${m.confidence} confidence</div>
+          </div>
+          <div class="match-pct" style="color:${color}">${m.similarity_pct.toFixed(1)}%</div>`;
+        list.appendChild(row);
+      });
     }
+    show('id-results');
   } catch {
-    el('search-error').textContent = '⚠ Network error';
-    show('search-error');
+    showErr('id-err', 'Network error.');
   } finally {
-    el('search-btn').disabled = false;
-    hide('search-spinner');
-    el('search-btn-text').textContent = 'SEARCH DATABASE';
+    setBusy('id-btn','id-ico','id-spin','id-txt', false, 'Search Database');
   }
 }
 
-function renderSearchResults(data) {
-  el('search-count').textContent = data.total;
-  const list = el('search-list');
-  list.innerHTML = '';
-  if (data.total === 0) {
-    list.innerHTML = '<p class="text-center py-6 text-sm" style="color:var(--muted)">No matches found in database.</p>';
-    return;
-  }
-  data.matches.forEach((m, i) => {
-    const div = document.createElement('div');
-    div.className = 'card flex items-center gap-4';
-    div.innerHTML = `
-      <div class="relative flex-shrink-0">
-        ${m.image_url
-          ? `<img src="${m.image_url}" class="w-14 h-14 rounded-xl object-cover" />`
-          : `<div class="w-14 h-14 rounded-xl flex items-center justify-center" style="background:var(--card2)"><svg width="24" height="24" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" stroke="#64748b" stroke-width="1.5"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="#64748b" stroke-width="1.5" stroke-linecap="round"/></svg></div>`}
-        ${i === 0 ? '<span class="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-yellow-400 flex items-center justify-center text-xs font-black text-black">1</span>' : ''}
-      </div>
-      <div class="flex-1 min-w-0">
-        <p class="font-bold truncate">${escHtml(m.name)}</p>
-        <p class="text-xs mt-0.5" style="color:var(--muted)">${escHtml(m.label)} · ${m.similarity_pct}% match</p>
-        <div class="mt-1.5 h-1.5 rounded-full" style="background:var(--border)">
-          <div class="meter-fill ${m.is_match?'match':'no-match'}" style="width:${Math.min(m.similarity_pct,100)}%"></div>
-        </div>
-      </div>
-      <span class="text-xs px-2 py-1 rounded-full font-semibold flex-shrink-0"
-        style="background:${m.is_match?'#05966930':'#dc262630'};color:${m.is_match?'#34d399':'#f87171'}">
-        ${m.confidence}
-      </span>`;
-    list.appendChild(div);
-  });
-}
-
-/* ── Database ── */
-let allFaces = [];
+/* ── Database ────────────────────────────────────────────────────────── */
+let _faces = [];
 
 async function loadDb() {
   try {
     const res = await fetch('/api/faces');
-    allFaces = await res.json();
-    renderDb(allFaces);
+    _faces = await res.json();
+    renderDb(_faces);
   } catch {
     toast('Failed to load database', false);
   }
 }
 
 function renderDb(faces) {
-  const grid = el('face-grid');
-  const badge = el('db-count-badge');
-  badge.textContent = faces.length + ' face' + (faces.length !== 1 ? 's' : '');
+  const grid = $('face-grid');
+  $('db-badge').textContent = faces.length + ' enrolled';
   grid.innerHTML = '';
 
-  if (faces.length === 0) {
-    show('db-empty');
-    return;
-  }
+  if (!faces.length) { show('db-empty'); return; }
   hide('db-empty');
 
   faces.forEach(f => {
     const card = document.createElement('div');
-    card.className = 'card p-0 overflow-hidden';
+    card.className = 'face-card';
     card.dataset.name = f.name.toLowerCase();
-    const date = new Date(f.created_at).toLocaleDateString(undefined, { month:'short', day:'numeric' });
+    const date = new Date(f.created_at).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'2-digit' });
     card.innerHTML = `
-      <div class="relative">
-        ${f.image_url
-          ? `<img src="${f.image_url}" class="w-full aspect-square object-cover" />`
-          : `<div class="w-full aspect-square flex items-center justify-center" style="background:var(--card2)"><svg width="36" height="36" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" stroke="#64748b" stroke-width="1.5"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="#64748b" stroke-width="1.5" stroke-linecap="round"/></svg></div>`}
-        <button onclick="deleteFace(${f.id},this)"
-          class="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center transition-all active:scale-90"
-          style="background:rgba(0,0,0,.6);backdrop-filter:blur(4px)">
-          <svg width="14" height="14" fill="none" viewBox="0 0 24 24">
-            <path stroke="#f87171" stroke-width="2" stroke-linecap="round" d="M6 18L18 6M6 6l12 12"/>
-          </svg>
-        </button>
+      ${f.image_url
+        ? `<img src="${f.image_url}" alt="${escHtml(f.name)}">`
+        : `<div class="no-img"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><circle cx="12" cy="8" r="4"/><path d="M3 21c0-4 4-7 9-7s9 3 9 7" stroke-linecap="round"/></svg></div>`}
+      <div class="face-card-info">
+        <div class="face-card-name">${escHtml(f.name)}</div>
+        <div class="face-card-date">${date} · #${f.id}</div>
       </div>
-      <div class="p-2">
-        <p class="font-semibold text-sm truncate">${escHtml(f.name)}</p>
-        <p class="text-xs mt-0.5" style="color:var(--muted)">${date} · #${escHtml(String(f.id))}</p>
-      </div>`;
+      <button class="face-card-del" onclick="deleteFace(${f.id},this)" title="Delete">✕</button>`;
     grid.appendChild(card);
   });
 }
 
 function filterDb(q) {
-  const filtered = q
-    ? allFaces.filter(f => f.name.toLowerCase().includes(q.toLowerCase()))
-    : allFaces;
+  const filtered = q ? _faces.filter(f => f.name.toLowerCase().includes(q.toLowerCase())) : _faces;
   renderDb(filtered);
 }
 
 async function deleteFace(id, btn) {
-  if (!confirm('Delete this face from the database?')) return;
+  if (!confirm('Remove this subject from the database?')) return;
   btn.disabled = true;
   try {
     const res = await fetch('/api/faces/' + id, { method: 'DELETE' });
-    if (res.ok) {
-      toast('Face deleted');
-      loadDb();
-    } else {
-      toast('Delete failed', false);
-      btn.disabled = false;
-    }
-  } catch {
-    toast('Network error', false);
-    btn.disabled = false;
-  }
+    if (res.ok) { toast('Subject removed'); loadDb(); }
+    else { toast('Delete failed', false); btn.disabled = false; }
+  } catch { toast('Network error', false); btn.disabled = false; }
 }
 
-// Load DB on open
+/* ── Utilities ───────────────────────────────────────────────────────── */
+function showErr(id, msg) {
+  $(id).textContent = '⚠ ' + msg;
+  $(id).classList.add('show');
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Load database count on start
 loadDb();
 </script>
 </body>
