@@ -23,9 +23,9 @@ class FaceEngine:
         logger.info("Loading InsightFace model (buffalo_l)...")
         self.app = FaceAnalysis(
             name="buffalo_l",
-            providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
+            providers=["CPUExecutionProvider"],
         )
-        self.app.prepare(ctx_id=0, det_size=(640, 640))
+        self.app.prepare(ctx_id=-1, det_size=(640, 640))
         logger.info("InsightFace model loaded.")
 
     def _read_image(self, data: bytes) -> np.ndarray:
