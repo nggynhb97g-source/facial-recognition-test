@@ -1,2 +1,3 @@
 faces.db
 __pycache__/
+logs/*.log
