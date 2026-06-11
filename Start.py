@@ -11,9 +11,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).parent
 
+# Force HOME to the project directory so every library that writes to ~/
+# (InsightFace models, pip cache, ONNX cache, etc.) stays inside the
+# container's writable data volume.
+os.environ["HOME"] = str(ROOT)
+
 # ── Step 1: venv bootstrap ────────────────────────────────────────────────────
-# Run everything inside a project-local venv so pip always has a writable
-# target (avoids "site-packages not writeable" in restricted containers).
 _VENV        = ROOT / ".venv"
 _VENV_PYTHON = _VENV / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
 _VENV_PIP    = _VENV / ("Scripts/pip.exe"    if sys.platform == "win32" else "bin/pip")
@@ -29,7 +32,7 @@ if not _inside_venv:
         except subprocess.CalledProcessError as exc:
             print(f"[FaceID] FATAL: could not create venv: {exc}", flush=True)
             sys.exit(1)
-    # Replace this process with the venv Python running the same script
+    # os.execv inherits the updated os.environ (including HOME) automatically
     os.execv(str(_VENV_PYTHON), [str(_VENV_PYTHON)] + sys.argv)
     sys.exit(0)  # unreachable — os.execv replaces the process
 

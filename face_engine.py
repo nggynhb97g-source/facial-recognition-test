@@ -2,8 +2,14 @@ import numpy as np
 from PIL import Image
 import io
 import logging
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+ROOT = Path(__file__).parent
+# All InsightFace model downloads must stay inside the project directory.
+# Default is ~/.insightface which may be outside the container's writable area.
+INSIGHTFACE_ROOT = ROOT / ".insightface"
 
 _engine = None
 
@@ -20,9 +26,11 @@ class FaceEngine:
         import insightface
         from insightface.app import FaceAnalysis
 
-        logger.info("Loading InsightFace model (buffalo_l)...")
+        INSIGHTFACE_ROOT.mkdir(parents=True, exist_ok=True)
+        logger.info("Loading InsightFace model (buffalo_l) — root: %s", INSIGHTFACE_ROOT)
         self.app = FaceAnalysis(
             name="buffalo_l",
+            root=str(INSIGHTFACE_ROOT),
             providers=["CPUExecutionProvider"],
         )
         self.app.prepare(ctx_id=-1, det_size=(640, 640))
