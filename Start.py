@@ -45,8 +45,14 @@ REQUIREMENTS = ROOT / "requirements.txt"
 
 def pip_install() -> None:
     log.info("Installing dependencies into .venv/ …")
+    # Purge pip's wheel cache first so stale/partial downloads don't waste space
+    subprocess.run(
+        [str(_VENV_PIP), "cache", "purge"],
+        cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+    )
     result = subprocess.run(
-        [str(_VENV_PIP), "install", "-r", str(REQUIREMENTS)],
+        # --no-cache-dir: stream wheels directly to install; no duplicate copy in cache
+        [str(_VENV_PIP), "install", "--no-cache-dir", "-r", str(REQUIREMENTS)],
         cwd=ROOT,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
