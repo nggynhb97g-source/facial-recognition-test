@@ -26,15 +26,21 @@ REQUIREMENTS = ROOT / "requirements.txt"
 
 def pip_install() -> None:
     log.info("Installing Python dependencies from requirements.txt …")
-    try:
-        subprocess.check_call(
-            [sys.executable, "-m", "pip", "install", "-r", str(REQUIREMENTS), "--quiet"],
-            cwd=ROOT,
-        )
+    result = subprocess.run(
+        [sys.executable, "-m", "pip", "install", "-r", str(REQUIREMENTS)],
+        cwd=ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,   # merge stderr into stdout
+        text=True,
+    )
+    output = result.stdout.strip()
+    if result.returncode == 0:
+        if output:
+            log.debug("pip output:\n%s", output)
         log.info("Dependencies installed successfully.")
-    except subprocess.CalledProcessError as exc:
-        log.critical("pip install failed (exit code %s)", exc.returncode, exc_info=True)
-        raise
+    else:
+        log.critical("pip install failed (exit code %s):\n%s", result.returncode, output)
+        raise subprocess.CalledProcessError(result.returncode, result.args)
 
 
 def ensure_dirs() -> None:
