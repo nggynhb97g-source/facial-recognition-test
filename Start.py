@@ -46,44 +46,66 @@ from logging_setup import setup
 log = setup()
 
 import argparse
+import shutil
 
 REQUIREMENTS = ROOT / "requirements.txt"
 
+# Heavy packages installed individually so temp files are cleaned between each.
+# pip normally batches all downloads before installing any, which means peak
+# disk use = sum of ALL wheel downloads simultaneously.  Installing one at a
+# time caps peak to: (already installed) + (one wheel download + extraction).
+_SEQUENTIAL_PACKAGES = [
+    "numpy>=1.26.0",
+    "Pillow>=10.0.0",
+    "scipy",
+    "scikit-image",
+    "onnx",
+    "onnxruntime>=1.24.0",
+    "opencv-python",
+    "insightface>=0.7.3",
+]
 
-def pip_install() -> None:
-    log.info("Installing dependencies into .venv/ …")
 
-    # Pterodactyl's /tmp is a tiny tmpfs in RAM; pip extracts wheels there and
-    # hits ENOSPC even when the data volume has unlimited space.  Point all
-    # temp activity into the container's data directory instead.
+def _pip_run(args: list[str]) -> None:
+    """Run pip with TMPDIR on the data volume; clean temp before and after."""
     pip_tmp = ROOT / ".pip-tmp"
-    pip_tmp.mkdir(exist_ok=True)
+    # Clean any leftover temp from a previous failed attempt first
+    shutil.rmtree(pip_tmp, ignore_errors=True)
+    pip_tmp.mkdir()
     env = {**os.environ, "TMPDIR": str(pip_tmp), "TEMP": str(pip_tmp), "TMP": str(pip_tmp)}
 
-    subprocess.run(
-        [str(_VENV_PIP), "cache", "purge"],
-        cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env,
-    )
     result = subprocess.run(
-        [str(_VENV_PIP), "install", "--no-cache-dir", "-r", str(REQUIREMENTS)],
+        [str(_VENV_PIP)] + args,
         cwd=ROOT,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
         env=env,
     )
-
-    import shutil
     shutil.rmtree(pip_tmp, ignore_errors=True)
 
     output = result.stdout.strip()
-    if result.returncode == 0:
-        if output:
-            log.debug("pip output:\n%s", output)
-        log.info("Dependencies installed successfully.")
-    else:
-        log.critical("pip install failed (exit code %s):\n%s", result.returncode, output)
-        raise subprocess.CalledProcessError(result.returncode, result.args)
+    if result.returncode != 0:
+        log.critical("pip failed (exit %s):\n%s", result.returncode, output)
+        raise subprocess.CalledProcessError(result.returncode, args)
+    if output:
+        log.debug("pip:\n%s", output)
+
+
+def pip_install() -> None:
+    # Purge pip cache to free any space from previous failed attempts
+    _pip_run(["cache", "purge"])
+
+    # Install heavy packages one at a time (temp cleaned between each)
+    for pkg in _SEQUENTIAL_PACKAGES:
+        log.info("Installing %s …", pkg)
+        _pip_run(["install", "--no-cache-dir", pkg])
+
+    # Catch any remaining deps from requirements.txt not listed above
+    log.info("Checking remaining requirements …")
+    _pip_run(["install", "--no-cache-dir", "-r", str(REQUIREMENTS)])
+
+    log.info("All dependencies installed.")
 
 
 def ensure_dirs() -> None:
