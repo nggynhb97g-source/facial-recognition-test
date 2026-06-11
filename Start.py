@@ -69,42 +69,57 @@ _SEQUENTIAL_PACKAGES = [
 ]
 
 
+def _log_df() -> None:
+    """Log disk usage for all filesystems so we can see which one is full."""
+    r = subprocess.run(["df", "-h"], capture_output=True, text=True)
+    log.info("Disk usage:\n%s", r.stdout.strip())
+
+
 def _pip_run(args: list[str]) -> None:
-    """Run pip with TMPDIR on the data volume; clean temp before and after."""
+    """Run pip via shell so TMPDIR is honoured before Python imports tempfile."""
     pip_tmp = ROOT / ".pip-tmp"
-    # Clean any leftover temp from a previous failed attempt first
     shutil.rmtree(pip_tmp, ignore_errors=True)
     pip_tmp.mkdir()
-    env = {**os.environ, "TMPDIR": str(pip_tmp), "TEMP": str(pip_tmp), "TMP": str(pip_tmp)}
+
+    # Use a shell wrapper — setting TMPDIR at shell level guarantees it is in
+    # effect before pip/Python load the tempfile module (which may cache /tmp).
+    pip_cmd = " ".join(
+        f'"{a}"' for a in ([str(_VENV_PIP)] + args)
+    )
+    shell_cmd = (
+        f'export TMPDIR="{pip_tmp}" TEMP="{pip_tmp}" TMP="{pip_tmp}"; '
+        f'{pip_cmd}'
+    )
 
     result = subprocess.run(
-        [str(_VENV_PIP)] + args,
+        ["sh", "-c", shell_cmd],
         cwd=ROOT,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
-        env=env,
+        env=os.environ,
     )
     shutil.rmtree(pip_tmp, ignore_errors=True)
 
     output = result.stdout.strip()
     if result.returncode != 0:
         log.critical("pip failed (exit %s):\n%s", result.returncode, output)
+        _log_df()  # show which filesystem ran out of space
         raise subprocess.CalledProcessError(result.returncode, args)
     if output:
         log.debug("pip:\n%s", output)
 
 
 def pip_install() -> None:
-    # Purge pip cache to free any space from previous failed attempts
+    log.info("Disk state at startup:")
+    _log_df()
+
     _pip_run(["cache", "purge"])
 
-    # Install heavy packages one at a time (temp cleaned between each)
     for pkg in _SEQUENTIAL_PACKAGES:
         log.info("Installing %s …", pkg)
         _pip_run(["install", "--no-cache-dir", pkg])
 
-    # Catch any remaining deps from requirements.txt not listed above
     log.info("Checking remaining requirements …")
     _pip_run(["install", "--no-cache-dir", "-r", str(REQUIREMENTS)])
 
