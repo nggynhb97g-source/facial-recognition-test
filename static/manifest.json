@@ -1,0 +1,13 @@
+{
+  "name": "InsightFaceID",
+  "short_name": "FaceID",
+  "description": "Tactical Biometric Analysis System",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#04080f",
+  "theme_color": "#04080f",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "/static/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
