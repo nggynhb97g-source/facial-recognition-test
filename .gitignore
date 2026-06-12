@@ -1,2 +1,6 @@
 faces.db
 __pycache__/
+logs/*.log
+.venv/
+.pip-tmp/
+.insightface/
