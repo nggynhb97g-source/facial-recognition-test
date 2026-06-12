@@ -17,6 +17,11 @@ logger = logging.getLogger(__name__)
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
 
 
+def _spatial(info: dict) -> dict | None:
+    if not info.get("landmarks"):
+        return None
+    return {"landmarks": info["landmarks"], "lm_count": info["lm_count"], "bbox": info["bbox"]}
+
 async def read_limited(upload: UploadFile) -> bytes:
     data = await upload.read(MAX_UPLOAD_BYTES + 1)
     if len(data) > MAX_UPLOAD_BYTES:
@@ -74,15 +79,6 @@ async def compare_faces(
     similarity = engine.cosine_similarity(info1["embedding"], info2["embedding"])
     result = engine.classify_match(similarity)
 
-    def _spatial(info):
-        if not info.get("landmarks"):
-            return None
-        return {
-            "landmarks": info["landmarks"],
-            "lm_count":  info["lm_count"],
-            "bbox":      info["bbox"],
-        }
-
     return {
         "similarity": round(similarity, 4),
         "similarity_pct": round(similarity * 100, 1),
@@ -129,6 +125,7 @@ async def add_face(
         "name": name.strip(),
         "image_url": f"/known_faces/{filename}",
         "face_count": info["face_count"],
+        "face_spatial": _spatial(info),
         "message": "Face added to database successfully",
     }
 
@@ -190,7 +187,7 @@ async def search_face(
             **engine.classify_match(m["similarity"]),
         })
 
-    return {"matches": result, "total": len(result)}
+    return {"matches": result, "total": len(result), "face_spatial": _spatial(info)}
 
 
 @app.get("/api/health")
