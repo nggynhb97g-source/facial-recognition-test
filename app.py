@@ -60,8 +60,11 @@ async def compare_faces(
     data1 = await read_limited(image1)
     data2 = await read_limited(image2)
 
-    info1 = engine.get_embedding_with_info(data1)
-    info2 = engine.get_embedding_with_info(data2)
+    try:
+        info1 = engine.get_embedding_with_info(data1)
+        info2 = engine.get_embedding_with_info(data2)
+    except ValueError as exc:
+        raise HTTPException(400, detail=str(exc))
 
     if info1["embedding"] is None:
         raise HTTPException(400, detail="No face detected in Image 1")
@@ -71,6 +74,15 @@ async def compare_faces(
     similarity = engine.cosine_similarity(info1["embedding"], info2["embedding"])
     result = engine.classify_match(similarity)
 
+    def _spatial(info):
+        if not info.get("landmarks"):
+            return None
+        return {
+            "landmarks": info["landmarks"],
+            "lm_count":  info["lm_count"],
+            "bbox":      info["bbox"],
+        }
+
     return {
         "similarity": round(similarity, 4),
         "similarity_pct": round(similarity * 100, 1),
@@ -79,6 +91,8 @@ async def compare_faces(
         "face_count_2": info2["face_count"],
         "det_score_1": round(info1.get("det_score", 0), 3),
         "det_score_2": round(info2.get("det_score", 0), 3),
+        "face1_spatial": _spatial(info1),
+        "face2_spatial": _spatial(info2),
     }
 
 
@@ -90,7 +104,10 @@ async def add_face(
     engine = get_engine()
 
     data = await read_limited(image)
-    info = engine.get_embedding_with_info(data)
+    try:
+        info = engine.get_embedding_with_info(data)
+    except ValueError as exc:
+        raise HTTPException(400, detail=str(exc))
 
     if info["embedding"] is None:
         raise HTTPException(400, detail="No face detected in the image")
@@ -145,12 +162,15 @@ async def delete_face(face_id: int):
 @app.post("/api/search")
 async def search_face(
     image: UploadFile = File(..., description="Face image to search for"),
-    threshold: float = 0.35,
+    threshold: float = 0.40,
 ):
     engine = get_engine()
 
     data = await read_limited(image)
-    info = engine.get_embedding_with_info(data)
+    try:
+        info = engine.get_embedding_with_info(data)
+    except ValueError as exc:
+        raise HTTPException(400, detail=str(exc))
 
     if info["embedding"] is None:
         raise HTTPException(400, detail="No face detected in the image")
