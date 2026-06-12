@@ -33,7 +33,7 @@
 
     /* ── Reset / iOS base ────────────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html { height: 100%; -webkit-text-size-adjust: 100%; }
+    html { height: 100%; -webkit-text-size-adjust: 100%; overflow-x: hidden; }
     body {
       font-family: var(--font);
       background: var(--bg);
@@ -45,6 +45,7 @@
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
       min-height: 100dvh;
+      min-height: 100vh; /* fallback for iOS < 15.4 */
     }
     button, label { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
     button { font-family: var(--font); cursor: pointer; border: none; }
@@ -54,9 +55,9 @@
     ::-webkit-scrollbar-thumb { background: #1a2a3a; border-radius: 2px; }
 
     /* ── Background layers ───────────────────────────────────────────────── */
-    #bg-canvas { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+    #bg-canvas { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 0; pointer-events: none; }
     #grid {
-      position: fixed; inset: 0; z-index: 1; pointer-events: none;
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 1; pointer-events: none;
       background-image:
         linear-gradient(rgba(0,200,255,.022) 1px, transparent 1px),
         linear-gradient(90deg, rgba(0,200,255,.022) 1px, transparent 1px);
@@ -70,7 +71,7 @@
         linear-gradient(90deg, rgba(0,200,255,.07) 1px, transparent 1px); }
     }
     #crt {
-      position: fixed; inset: 0; z-index: 2; pointer-events: none;
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 2; pointer-events: none;
       background: repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.045) 2px,rgba(0,0,0,.045) 3px);
     }
 
@@ -86,8 +87,9 @@
 
     /* ── Boot overlay ────────────────────────────────────────────────────── */
     #boot {
-      position: fixed; inset: 0; z-index: 9999; background: var(--bg);
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 9999; background: var(--bg);
       display: flex; align-items: center; justify-content: center;
+      overflow: hidden;
       transition: opacity .65s, visibility .65s;
     }
     #boot.hide { opacity: 0; visibility: hidden; pointer-events: none; }
@@ -103,6 +105,7 @@
       font-family: var(--mono); font-size: 12px;
       border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px;
       background: rgba(0,200,255,.018); min-height: 190px; position: relative;
+      overflow: hidden;
     }
     #boot-term::before {
       content: 'TERMINAL'; position: absolute; top: -9px; left: 12px;
@@ -358,7 +361,8 @@
 
     /* ── Bottom nav ──────────────────────────────────────────────────────── */
     nav {
-      position: fixed; bottom: 0; inset-x: 0; z-index: 50;
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
+      width: 100%;
       background: rgba(4,8,15,.95); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
       border-top: 1px solid var(--border);
       padding-bottom: var(--safe-bot);
