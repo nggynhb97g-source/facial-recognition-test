@@ -1,5 +1,5 @@
-const CACHE = 'faceid-v1';
-const PRECACHE = ['/', '/static/index.html', '/static/icon.svg', '/static/manifest.json'];
+const CACHE = 'faceid-v2';
+const PRECACHE = ['/', '/static/index.html', '/static/style.css', '/static/app.js', '/static/icon.svg', '/static/manifest.json'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(PRECACHE)).catch(() => {}));
