@@ -74,6 +74,15 @@ async def compare_faces(
     similarity = engine.cosine_similarity(info1["embedding"], info2["embedding"])
     result = engine.classify_match(similarity)
 
+    def _spatial(info):
+        if not info.get("landmarks"):
+            return None
+        return {
+            "landmarks": info["landmarks"],
+            "lm_count":  info["lm_count"],
+            "bbox":      info["bbox"],
+        }
+
     return {
         "similarity": round(similarity, 4),
         "similarity_pct": round(similarity * 100, 1),
@@ -82,6 +91,8 @@ async def compare_faces(
         "face_count_2": info2["face_count"],
         "det_score_1": round(info1.get("det_score", 0), 3),
         "det_score_2": round(info2.get("det_score", 0), 3),
+        "face1_spatial": _spatial(info1),
+        "face2_spatial": _spatial(info2),
     }
 
 

@@ -549,6 +549,19 @@
     }
     .success-glow { animation: success-glow .7s ease-out; }
 
+    /* ── Mesh canvas ─────────────────────────────────────────────────────── */
+    #mesh-wrap {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      background: rgba(4,8,15,.75);
+      position: relative;
+    }
+    #mesh-canvas {
+      width: 100%;
+      display: block;
+    }
+
     /* ── Utilities ───────────────────────────────────────────────────────── */
     .mt-3 { margin-top: 12px; }
     .mt-4 { margin-top: 16px; }
@@ -657,6 +670,10 @@
         </svg>
         <span id="cmp-txt">Run Comparison</span>
       </button>
+    </div>
+
+    <div id="mesh-wrap" class="hidden mt-4">
+      <canvas id="mesh-canvas"></canvas>
     </div>
 
     <div class="result-banner" id="cmp-result">
@@ -1097,6 +1114,225 @@ function setBusy(btnId, icoId, spinId, txtId, busy, idleLabel) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   FACE MESH VISUALIZER
+═══════════════════════════════════════════════════════════════ */
+let _meshRaf = null;
+
+function _buildMeshData(spatial) {
+  const { landmarks, lm_count, bbox } = spatial;
+  const [bx1, by1, bx2, by2] = bbox;
+  const bw = bx2 - bx1, bh = by2 - by1;
+  const bcx = (bx1 + bx2) / 2, bcy = (by1 + by2) / 2;
+
+  let pts;
+  if (lm_count === 106) {
+    pts = landmarks.map(([x, y]) => ({ x, y, kp: false }));
+  } else {
+    // 5 kps — generate synthetic oval mesh seeded by the keypoints
+    pts = landmarks.map(([x, y]) => ({ x, y, kp: true }));
+    for (let r = 0; r < 10; r++) {
+      for (let c = 0; c < 9; c++) {
+        const nx = (c / 8) * 2 - 1;
+        const ny = (r / 9) * 2 - 1;
+        const rx = 0.88 - Math.abs(ny) * 0.18;  // narrower toward chin
+        if ((nx * nx) / (rx * rx) + ny * ny > 1.0) continue;
+        // deterministic pseudo-jitter (no Math.random so mesh is stable)
+        const jx = Math.sin(r * 17.3 + c * 31.7) * bw * 0.025;
+        const jy = Math.cos(r * 29.1 + c * 13.9) * bh * 0.02;
+        const px = bcx + nx * bw * 0.46 + jx;
+        const py = bcy + ny * bh * 0.51 + jy;
+        if (pts.every(p => Math.hypot(p.x - px, p.y - py) > bw * 0.07))
+          pts.push({ x: px, y: py, kp: false });
+      }
+    }
+  }
+
+  // Sort top-to-bottom so dots appear in a top-down scan pattern
+  pts.sort((a, b) => a.y - b.y);
+
+  // Build edges: connect each point to all neighbours within threshold
+  const edgeDist = lm_count === 106 ? bw * 0.12 : bw * 0.20;
+  const edges = [];
+  for (let i = 0; i < pts.length; i++) {
+    for (let j = i + 1; j < pts.length; j++) {
+      if (Math.hypot(pts[i].x - pts[j].x, pts[i].y - pts[j].y) < edgeDist)
+        edges.push([i, j]);
+    }
+  }
+
+  return { pts, edges, bcx, bcy, bw, bh };
+}
+
+function _plotPt(pt, mesh, cx, cy, scale) {
+  return { x: cx + (pt.x - mesh.bcx) * scale, y: cy + (pt.y - mesh.bcy) * scale };
+}
+
+function _rgba(r, g, b, a) { return `rgba(${r},${g},${b},${a})`; }
+function _lerp3(c1, c2, t) { return c1.map((v, i) => Math.round(v + (c2[i] - v) * t)); }
+function _easeIO(t) { return t < .5 ? 2*t*t : 1-2*(1-t)*(1-t); }
+function _ease3(t) { return 1 - Math.pow(1 - t, 3); }
+
+function _drawMesh(ctx, mesh, cx, cy, scale, col, dotA, edgeA, dotFrac, edgeFrac) {
+  const { pts, edges } = mesh;
+  const numEdges = Math.floor(edges.length * edgeFrac);
+  ctx.lineWidth = 0.55;
+  for (let i = 0; i < numEdges; i++) {
+    const a = _plotPt(pts[edges[i][0]], mesh, cx, cy, scale);
+    const b = _plotPt(pts[edges[i][1]], mesh, cx, cy, scale);
+    ctx.strokeStyle = _rgba(...col, edgeA * 0.38);
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+  }
+  const numDots = Math.floor(pts.length * dotFrac);
+  for (let i = 0; i < numDots; i++) {
+    const p = _plotPt(pts[i], mesh, cx, cy, scale);
+    const r = pts[i].kp ? 2.8 : 1.3;
+    ctx.beginPath();
+    ctx.fillStyle = _rgba(...col, dotA);
+    if (pts[i].kp) { ctx.shadowColor = _rgba(...col, 0.9); ctx.shadowBlur = 8; }
+    ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+}
+
+function animateMesh(spatial1, spatial2, isMatch, onResultReady) {
+  if (_meshRaf) { cancelAnimationFrame(_meshRaf); _meshRaf = null; }
+
+  const canvas = $('mesh-canvas');
+  const ctx = canvas.getContext('2d');
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const W_CSS = canvas.offsetWidth || 320;
+  const H_CSS = 230;
+  canvas.width  = W_CSS * dpr;
+  canvas.height = H_CSS * dpr;
+  canvas.style.height = H_CSS + 'px';
+  ctx.scale(dpr, dpr);
+  const cw = W_CSS, ch = H_CSS;
+
+  const mesh1 = _buildMeshData(spatial1);
+  const mesh2 = _buildMeshData(spatial2);
+
+  // Use the same visual scale for fair side-by-side comparison
+  const pad = 1.35;
+  const s1 = Math.min((cw * 0.41) / (mesh1.bw * pad), (ch * 0.80) / (mesh1.bh * pad));
+  const s2 = Math.min((cw * 0.41) / (mesh2.bw * pad), (ch * 0.80) / (mesh2.bh * pad));
+  const scale = Math.min(s1, s2);
+
+  const CY = ch * 0.50;
+  const CX_L = cw * 0.25, CX_R = cw * 0.75, CX_C = cw * 0.50;
+
+  const C1  = [0, 200, 255];    // cyan  — subject 1
+  const C2  = [190, 80, 255];   // violet — subject 2
+  const CM  = isMatch ? [0, 255, 136] : [255, 51, 85];  // green / red
+
+  // Phase timestamps (ms)
+  const T1 = 700;   // dots fully visible
+  const T2 = 1400;  // wireframe built
+  const T3 = 1900;  // meshes centred / overlapping
+  const T4 = 2500;  // colour transitioned to match/no-match
+  const TOTAL = T4;
+
+  let resultFired = false;
+  const t0 = performance.now();
+
+  function frame(now) {
+    const el = now - t0;
+    ctx.clearRect(0, 0, cw, ch);
+
+    // Faint dark panel
+    ctx.fillStyle = 'rgba(4,8,15,0.55)';
+    ctx.fillRect(0, 0, cw, ch);
+
+    let cx1, cx2;
+    let col1 = C1, col2 = C2;
+    let dotFrac1, dotFrac2, edgeFrac1 = 0, edgeFrac2 = 0;
+    let dotA = 0.9, edgeA = 0.9;
+
+    if (el < T1) {
+      const p = _ease3(el / T1);
+      cx1 = CX_L; cx2 = CX_R;
+      dotFrac1 = dotFrac2 = p;
+    } else if (el < T2) {
+      const p = _ease3((el - T1) / (T2 - T1));
+      cx1 = CX_L; cx2 = CX_R;
+      dotFrac1 = dotFrac2 = 1;
+      edgeFrac1 = edgeFrac2 = p;
+    } else if (el < T3) {
+      const p = _easeIO((el - T2) / (T3 - T2));
+      cx1 = CX_L + (CX_C - CX_L) * p;
+      cx2 = CX_R - (CX_R - CX_C) * p;
+      dotFrac1 = dotFrac2 = edgeFrac1 = edgeFrac2 = 1;
+      if (!resultFired && p > 0.6) { resultFired = true; onResultReady && onResultReady(); }
+    } else if (el < T4) {
+      const p = (el - T3) / (T4 - T3);
+      cx1 = cx2 = CX_C;
+      dotFrac1 = dotFrac2 = edgeFrac1 = edgeFrac2 = 1;
+      col1 = _lerp3(C1, CM, p);
+      col2 = _lerp3(C2, CM, p);
+      if (!resultFired) { resultFired = true; onResultReady && onResultReady(); }
+    } else {
+      // Steady pulsing state
+      cx1 = cx2 = CX_C;
+      dotFrac1 = dotFrac2 = edgeFrac1 = edgeFrac2 = 1;
+      col1 = col2 = CM;
+      const pulse = 0.55 + 0.35 * Math.sin((el - T4) / 550 * Math.PI);
+      dotA = pulse; edgeA = pulse * 0.75;
+    }
+
+    // Dashed centre divider while meshes are side by side
+    if (el < T2) {
+      const a = (1 - el / T2) * 0.28;
+      ctx.strokeStyle = `rgba(0,200,255,${a})`;
+      ctx.lineWidth = .5;
+      ctx.setLineDash([3, 6]);
+      ctx.beginPath(); ctx.moveTo(cw/2, 12); ctx.lineTo(cw/2, ch-12); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Subject labels — fade out before slide
+    if (el < T3) {
+      const fadeIn  = Math.min(1, el / 150);
+      const fadeOut = Math.max(0, 1 - (el - T2) / (T3 - T2) * 1.5);
+      const a = fadeIn * fadeOut;
+      ctx.font = '9px "Courier New"';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = _rgba(...C1, a * 0.75);
+      ctx.fillText('SUBJECT 01', CX_L, 14);
+      ctx.fillStyle = _rgba(...C2, a * 0.75);
+      ctx.fillText('SUBJECT 02', CX_R, 14);
+    }
+
+    // Status label at bottom
+    ctx.font = '10px "Courier New"';
+    ctx.textAlign = 'center';
+    if (el < T1) {
+      ctx.fillStyle = 'rgba(0,200,255,0.45)';
+      ctx.fillText('PROJECTING DOT MATRIX...', cw/2, ch - 9);
+    } else if (el < T2) {
+      ctx.fillStyle = 'rgba(0,200,255,0.45)';
+      ctx.fillText('CONSTRUCTING BIOMETRIC MESH...', cw/2, ch - 9);
+    } else if (el < T3) {
+      ctx.fillStyle = 'rgba(0,200,255,0.45)';
+      ctx.fillText('ALIGNING FACIAL VECTORS...', cw/2, ch - 9);
+    } else if (el < T4) {
+      ctx.fillStyle = 'rgba(255,255,255,0.35)';
+      ctx.fillText('COMPARING BIOMETRIC SIGNATURES...', cw/2, ch - 9);
+    } else {
+      const pulse = 0.5 + 0.45 * Math.abs(Math.sin((el - T4) / 420));
+      ctx.fillStyle = _rgba(...CM, pulse);
+      ctx.fillText(isMatch ? '— IDENTITY CONFIRMED —' : '— IDENTITY MISMATCH —', cw/2, ch - 9);
+    }
+
+    _drawMesh(ctx, mesh1, cx1, CY, scale, col1, dotA, edgeA, dotFrac1, edgeFrac1);
+    _drawMesh(ctx, mesh2, cx2, CY, scale, col2, dotA, edgeA, dotFrac2, edgeFrac2);
+
+    _meshRaf = requestAnimationFrame(frame);
+  }
+
+  _meshRaf = requestAnimationFrame(frame);
+}
+
+/* ═══════════════════════════════════════════════════════════════
    COMPARE
 ═══════════════════════════════════════════════════════════════ */
 async function doCompare(e) {
@@ -1133,19 +1369,18 @@ async function doCompare(e) {
   }
 }
 
-function renderCompare(d) {
+function _showResultBanner(d) {
   const pct   = d.similarity_pct;
   const color = d.is_match ? (pct >= 60 ? 'var(--green)' : 'var(--amber)') : 'var(--red)';
   const el    = $('cmp-result');
 
   el.className = 'result-banner show ' + (d.is_match ? (pct >= 60 ? 'match' : 'likely') : 'nomatch');
-
   const scanEl = el.querySelector('.result-scan');
-  if (scanEl) { scanEl.style.color = color; }
+  if (scanEl) scanEl.style.color = color;
 
   const pctEl = $('r-pct');
   pctEl.style.color = color;
-  countUp(pctEl, pct, 1300, 1, '%');
+  countUp(pctEl, pct, 1200, 1, '%');
 
   const verdictEl = $('r-verdict');
   verdictEl.style.color = color;
@@ -1160,7 +1395,20 @@ function renderCompare(d) {
   const meter = $('r-meter');
   meter.style.background = color;
   meter.style.width = '0%';
-  setTimeout(() => { meter.style.width = Math.min(pct, 100) + '%'; }, 100);
+  setTimeout(() => { meter.style.width = Math.min(pct, 100) + '%'; }, 80);
+}
+
+function renderCompare(d) {
+  // Hide any previous mesh/result
+  $('cmp-result').classList.remove('show');
+  hide('mesh-wrap');
+
+  if (d.face1_spatial && d.face2_spatial) {
+    show('mesh-wrap');
+    animateMesh(d.face1_spatial, d.face2_spatial, d.is_match, () => _showResultBanner(d));
+  } else {
+    _showResultBanner(d);
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════

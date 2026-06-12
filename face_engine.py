@@ -56,14 +56,37 @@ class FaceEngine:
         return face.normed_embedding.astype(np.float32)
 
     def get_embedding_with_info(self, data: bytes) -> dict:
-        faces = self.detect_faces(data)
+        img = self._read_image(data)
+        h, w = img.shape[:2]
+        faces = self.app.get(img)
         if not faces:
             return {"embedding": None, "face_count": 0}
         face = max(faces, key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]))
+
+        # Prefer 106-point 2-D landmarks; fall back to 5 keypoints
+        lm_arr = getattr(face, "landmark_2d_106", None)
+        if lm_arr is not None:
+            landmarks = [[float(x / w), float(y / h)] for x, y in lm_arr]
+            lm_count = 106
+        else:
+            kps = getattr(face, "kps", None)
+            if kps is not None:
+                landmarks = [[float(x / w), float(y / h)] for x, y in kps]
+                lm_count = 5
+            else:
+                landmarks = None
+                lm_count = 0
+
         return {
             "embedding": face.normed_embedding.astype(np.float32),
             "face_count": len(faces),
             "det_score": float(face.det_score),
+            "landmarks": landmarks,
+            "lm_count": lm_count,
+            "bbox": [
+                float(face.bbox[0] / w), float(face.bbox[1] / h),
+                float(face.bbox[2] / w), float(face.bbox[3] / h),
+            ],
         }
 
     @staticmethod
