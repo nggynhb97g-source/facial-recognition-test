@@ -187,7 +187,11 @@
       0%,100% { box-shadow:0 0 0 1px rgba(0,200,255,.3),0 0 18px rgba(0,200,255,.1); }
       50%     { box-shadow:0 0 0 2px rgba(0,200,255,.6),0 0 32px rgba(0,200,255,.22); }
     }
-    .drop-zone input[type=file] { display: none; }
+    /* Invisible but physically present — required for iOS Safari to open picker */
+    .drop-zone input[type=file] {
+      position: absolute; inset: 0; opacity: 0; z-index: 10;
+      cursor: pointer; width: 100%; height: 100%;
+    }
 
     /* Corner brackets */
     .drop-zone::before,.drop-zone::after,.drop-zone .br::before,.drop-zone .br::after {
@@ -731,7 +735,7 @@
 /* ═══════════════════════════════════════════════════════════════
    SERVICE WORKER
 ═══════════════════════════════════════════════════════════════ */
-if ('serviceWorker' in navigator) {
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('/static/sw.js').catch(() => {});
 }
 
